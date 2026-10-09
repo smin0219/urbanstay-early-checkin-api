@@ -31,3 +31,4 @@ urbanstay:
     standard-check-in-at: "15:00"
     standard-check-out-at: "11:00"
     early-checkout-threshold: 30m
+    high-floor-from: 8

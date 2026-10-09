@@ -22,12 +22,15 @@ public final class RuleContexts {
 	}
 
 	public static RoomSnapshot snapshot(Room room) {
-		return new RoomSnapshot(room.getNumber(), room.getStatus(), room.getReadyAt());
+		return new RoomSnapshot(room.getNumber(), room.getType(), room.getFloor(), room.getView(), room.getStatus(),
+				room.getReadyAt());
 	}
 
 	public static ReservationSnapshot snapshot(Reservation r) {
 		return new ReservationSnapshot(
 				r.getId(),
+				r.getRoomType(),
+				r.getRequests().stream().sorted().toList(),
 				r.getRoom() == null ? null : r.getRoom().getNumber(),
 				r.getStatus(),
 				r.getCheckInDate(),

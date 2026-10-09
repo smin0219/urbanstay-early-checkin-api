@@ -12,4 +12,8 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
 	@Query("select r from Reservation r where r.checkInDate <= :date and r.checkOutDate >= :date")
 	List<Reservation> findStayingOn(LocalDate date);
 
+	/** [checkIn, checkOut) 기간과 겹치거나 checkIn 전날 밤에 묵은 예약 (배정 후보 판단용) */
+	@Query("select r from Reservation r where r.checkInDate < :checkOut and r.checkOutDate >= :checkIn")
+	List<Reservation> findAround(LocalDate checkIn, LocalDate checkOut);
+
 }

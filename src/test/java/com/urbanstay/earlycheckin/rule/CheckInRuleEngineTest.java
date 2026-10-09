@@ -19,6 +19,8 @@ import org.junit.jupiter.params.provider.CsvSource;
 import com.urbanstay.earlycheckin.domain.OfferStatus;
 import com.urbanstay.earlycheckin.domain.ReservationStatus;
 import com.urbanstay.earlycheckin.domain.RoomStatus;
+import com.urbanstay.earlycheckin.domain.RoomType;
+import com.urbanstay.earlycheckin.domain.RoomView;
 import com.urbanstay.earlycheckin.rule.NextStep.Actor;
 import com.urbanstay.earlycheckin.rule.OperatorAlert.Level;
 import com.urbanstay.earlycheckin.rule.RuleAction.ExpireOffer;
@@ -34,7 +36,7 @@ class CheckInRuleEngineTest {
 
 	private static final CheckInPolicy POLICY = new CheckInPolicy(LocalTime.of(12, 0), LocalTime.of(14, 0),
 			LocalTime.of(13, 30), LocalTime.of(14, 30), LocalTime.of(15, 0), LocalTime.of(11, 0),
-			Duration.ofMinutes(30));
+			Duration.ofMinutes(30), 8);
 
 	private final CheckInRuleEngine engine = new CheckInRuleEngine(POLICY);
 
@@ -308,11 +310,11 @@ class CheckInRuleEngineTest {
 	}
 
 	private static RoomSnapshot room(String number, RoomStatus status) {
-		return new RoomSnapshot(number, status, null);
+		return new RoomSnapshot(number, RoomType.STUDIO, 12, RoomView.CITY, status, null);
 	}
 
 	private static RoomSnapshot readyRoom(String number, String readyAt) {
-		return new RoomSnapshot(number, RoomStatus.READY, at(readyAt));
+		return new RoomSnapshot(number, RoomType.STUDIO, 12, RoomView.CITY, RoomStatus.READY, at(readyAt));
 	}
 
 	private static ArrivalBuilder arrival(long id) {
@@ -403,8 +405,9 @@ class CheckInRuleEngineTest {
 		}
 
 		ReservationSnapshot build() {
-			return new ReservationSnapshot(id, roomNumber, status, checkInDate, checkOutDate, checkOutTime,
-					checkedOutAt, noonNoticeSentAt, offerStatus, earlyCheckInAt, passwordHeldAt, delayNoticeSentAt);
+			return new ReservationSnapshot(id, RoomType.STUDIO, List.of(), roomNumber, status, checkInDate,
+					checkOutDate, checkOutTime, checkedOutAt, noonNoticeSentAt, offerStatus, earlyCheckInAt,
+					passwordHeldAt, delayNoticeSentAt);
 		}
 
 	}

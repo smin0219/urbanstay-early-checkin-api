@@ -55,6 +55,8 @@ public class Reservation {
 	@Enumerated(EnumType.STRING)
 	private ReservationStatus status;
 
+	private LocalDateTime assignedAt;
+
 	private LocalDateTime noonNoticeSentAt;
 
 	@Enumerated(EnumType.STRING)
@@ -92,6 +94,24 @@ public class Reservation {
 		this.room = room;
 		this.status = status;
 		this.checkedOutAt = checkedOutAt;
+	}
+
+	/** 배정 가능 여부(후보 조건, 안내 발송 후 변경 불가)는 배정 규칙이 판단하고, 여기서는 상태만 확인한다. */
+	public void assign(Room room, LocalDateTime now) {
+		if (status != ReservationStatus.PENDING_ASSIGNMENT && status != ReservationStatus.ASSIGNED) {
+			throw new IllegalStateException("예약 " + id + "은(는) 배정을 바꿀 수 없는 상태입니다: " + status);
+		}
+		this.room = room;
+		this.status = ReservationStatus.ASSIGNED;
+		this.assignedAt = now;
+	}
+
+	/** 배정을 풀어 배정 대기로 되돌린다. 바꿀 수 있는지(안내 발송 전)는 배정 규칙이 판단한다. */
+	public void unassign() {
+		requireStatus(ReservationStatus.ASSIGNED);
+		this.room = null;
+		this.status = ReservationStatus.PENDING_ASSIGNMENT;
+		this.assignedAt = null;
 	}
 
 	public void sendNoonNotice(LocalDateTime now) {

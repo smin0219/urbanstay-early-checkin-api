@@ -16,11 +16,12 @@ public record CheckInPolicyProperties(
 		@DateTimeFormat(pattern = "HH:mm") LocalTime passwordSendAt,
 		@DateTimeFormat(pattern = "HH:mm") LocalTime standardCheckInAt,
 		@DateTimeFormat(pattern = "HH:mm") LocalTime standardCheckOutAt,
-		Duration earlyCheckoutThreshold) {
+		Duration earlyCheckoutThreshold,
+		int highFloorFrom) {
 
 	public CheckInPolicy toPolicy() {
 		return new CheckInPolicy(noonNoticeAt, lastEarlyCheckInAt, cleaningWarningAt, passwordSendAt,
-				standardCheckInAt, standardCheckOutAt, earlyCheckoutThreshold);
+				standardCheckInAt, standardCheckOutAt, earlyCheckoutThreshold, highFloorFrom);
 	}
 
 }
