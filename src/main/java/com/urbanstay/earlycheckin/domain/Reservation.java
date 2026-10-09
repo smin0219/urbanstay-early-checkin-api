@@ -1,0 +1,137 @@
+package com.urbanstay.earlycheckin.domain;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.util.Collection;
+import java.util.LinkedHashSet;
+import java.util.Set;
+
+import jakarta.persistence.CollectionTable;
+import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+
+@Entity
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+public class Reservation {
+
+	/** 샘플 데이터의 id를 그대로 써서 시나리오 초기화 후에도 같은 경로를 유지한다. */
+	@Id
+	private Long id;
+
+	private String guestName;
+
+	@Enumerated(EnumType.STRING)
+	private RoomType roomType;
+
+	private LocalDate checkInDate;
+
+	private LocalDate checkOutDate;
+
+	/** 예정 퇴실 시각 (레이트 체크아웃이면 기본값보다 늦다) */
+	private LocalTime checkOutTime;
+
+	@ElementCollection(fetch = FetchType.EAGER)
+	@CollectionTable(name = "reservation_request")
+	@Column(name = "room_request")
+	@Enumerated(EnumType.STRING)
+	private Set<RoomRequest> requests = new LinkedHashSet<>();
+
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "room_number")
+	private Room room;
+
+	@Enumerated(EnumType.STRING)
+	private ReservationStatus status;
+
+	private LocalDateTime noonNoticeSentAt;
+
+	@Enumerated(EnumType.STRING)
+	private OfferStatus offerStatus;
+
+	private LocalDateTime offerSentAt;
+
+	/** 얼리체크인으로 결제한 입실 시각 */
+	private LocalDateTime earlyCheckInAt;
+
+	private Integer earlyCheckInFee;
+
+	private LocalDateTime paidAt;
+
+	private LocalDateTime passwordSentAt;
+
+	private LocalDateTime passwordHeldAt;
+
+	private LocalDateTime delayNoticeSentAt;
+
+	private LocalDateTime checkedInAt;
+
+	private LocalDateTime checkedOutAt;
+
+	public Reservation(Long id, String guestName, RoomType roomType, LocalDate checkInDate, LocalDate checkOutDate,
+			LocalTime checkOutTime, Collection<RoomRequest> requests, Room room, ReservationStatus status,
+			LocalDateTime checkedOutAt) {
+		this.id = id;
+		this.guestName = guestName;
+		this.roomType = roomType;
+		this.checkInDate = checkInDate;
+		this.checkOutDate = checkOutDate;
+		this.checkOutTime = checkOutTime;
+		this.requests = new LinkedHashSet<>(requests);
+		this.room = room;
+		this.status = status;
+		this.checkedOutAt = checkedOutAt;
+	}
+
+	public void sendNoonNotice(LocalDateTime now) {
+		this.noonNoticeSentAt = now;
+	}
+
+	public void sendOffer(LocalDateTime now) {
+		requireStatus(ReservationStatus.ASSIGNED);
+		this.status = ReservationStatus.OFFER_SENT;
+		this.offerStatus = OfferStatus.SENT;
+		this.offerSentAt = now;
+	}
+
+	public void expireOffer() {
+		requireStatus(ReservationStatus.OFFER_SENT);
+		this.status = ReservationStatus.ASSIGNED;
+		this.offerStatus = OfferStatus.EXPIRED;
+	}
+
+	public void sendPassword(LocalDateTime now) {
+		if (room == null || !room.isReady()) {
+			throw new IllegalStateException("준비 완료가 아닌 객실에는 비밀번호를 보낼 수 없습니다: 예약 " + id);
+		}
+		this.status = ReservationStatus.PASSWORD_SENT;
+		this.passwordSentAt = now;
+	}
+
+	public void holdPassword(LocalDateTime now) {
+		this.status = ReservationStatus.PASSWORD_HELD;
+		this.passwordHeldAt = now;
+	}
+
+	public void sendDelayNotice(LocalDateTime now) {
+		this.delayNoticeSentAt = now;
+	}
+
+	private void requireStatus(ReservationStatus expected) {
+		if (status != expected) {
+			throw new IllegalStateException("예약 " + id + " 상태가 " + expected + "가 아닙니다: " + status);
+		}
+	}
+
+}

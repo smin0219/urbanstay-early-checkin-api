@@ -1,0 +1,55 @@
+{
+  "rooms": [
+    { "number": "1203", "type": "STUDIO", "floor": 12, "view": "CITY", "status": "OCCUPIED" },
+    { "number": "1105", "type": "STUDIO", "floor": 11, "view": "CITY", "status": "OCCUPIED" },
+    { "number": "1001", "type": "STUDIO", "floor": 10, "view": "CITY", "status": "OUT_OF_SERVICE" },
+    { "number": "901", "type": "DELUXE", "floor": 9, "view": "CITY", "status": "READY", "readyAt": "2026-10-10T09:10:00" },
+    { "number": "803", "type": "STUDIO", "floor": 8, "view": "CITY", "status": "OCCUPIED" },
+    { "number": "802", "type": "STUDIO", "floor": 8, "view": "COURTYARD", "status": "READY", "readyAt": "2026-10-09T16:00:00" },
+    { "number": "501", "type": "TWIN", "floor": 5, "view": "COURTYARD", "status": "READY", "readyAt": "2026-10-09T15:30:00" }
+  ],
+  "reservations": [
+    {
+      "id": 1, "guestName": "김민수", "roomType": "STUDIO",
+      "checkInDate": "2026-10-10", "checkOutDate": "2026-10-11",
+      "requests": ["HIGH_FLOOR", "CITY_VIEW"],
+      "status": "PENDING_ASSIGNMENT"
+    },
+    {
+      "id": 2, "guestName": "박준호", "roomType": "STUDIO",
+      "checkInDate": "2026-10-10", "checkOutDate": "2026-10-12",
+      "roomNumber": "803", "status": "ASSIGNED"
+    },
+    {
+      "id": 3, "guestName": "이서연", "roomType": "TWIN",
+      "checkInDate": "2026-10-10", "checkOutDate": "2026-10-11",
+      "roomNumber": "501", "status": "ASSIGNED"
+    },
+    {
+      "id": 4, "guestName": "최지훈", "roomType": "DELUXE",
+      "checkInDate": "2026-10-10", "checkOutDate": "2026-10-12",
+      "requests": ["HIGH_FLOOR"],
+      "roomNumber": "901", "status": "ASSIGNED"
+    },
+    {
+      "id": 101, "guestName": "윤서준", "roomType": "STUDIO",
+      "checkInDate": "2026-10-08", "checkOutDate": "2026-10-10",
+      "roomNumber": "1203", "status": "CHECKED_IN"
+    },
+    {
+      "id": 102, "guestName": "한예린", "roomType": "STUDIO",
+      "checkInDate": "2026-10-09", "checkOutDate": "2026-10-10", "checkOutTime": "13:00",
+      "roomNumber": "803", "status": "CHECKED_IN"
+    },
+    {
+      "id": 103, "guestName": "강도윤", "roomType": "STUDIO",
+      "checkInDate": "2026-10-08", "checkOutDate": "2026-10-12",
+      "roomNumber": "1105", "status": "CHECKED_IN"
+    },
+    {
+      "id": 104, "guestName": "송하늘", "roomType": "DELUXE",
+      "checkInDate": "2026-10-09", "checkOutDate": "2026-10-10",
+      "roomNumber": "901", "status": "CHECKED_OUT", "checkedOutAt": "2026-10-10T08:20:00"
+    }
+  ]
+}

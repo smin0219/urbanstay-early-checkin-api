@@ -1,0 +1,33 @@
+spring:
+  application:
+    name: backend
+  datasource:
+    url: jdbc:h2:mem:urbanstay;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    open-in-view: false
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+server:
+  port: 8080
+
+urbanstay:
+  clock:
+    start: "2026-10-10T09:30:00"
+    zone: Asia/Seoul
+  # 운영 정책. 가정값이 확인되면 여기만 바꾼다 (docs/planning.md "열린 질문과 가정값")
+  policy:
+    noon-notice-at: "12:00"
+    last-early-check-in-at: "14:00"
+    cleaning-warning-at: "13:30"
+    password-send-at: "14:30"
+    standard-check-in-at: "15:00"
+    standard-check-out-at: "11:00"
+    early-checkout-threshold: 30m
