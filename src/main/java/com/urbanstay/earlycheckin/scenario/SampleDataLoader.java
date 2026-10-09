@@ -16,6 +16,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.urbanstay.earlycheckin.clock.ClockService;
+import com.urbanstay.earlycheckin.common.AccessCodes;
 import com.urbanstay.earlycheckin.domain.MessageLogRepository;
 import com.urbanstay.earlycheckin.domain.Reservation;
 import com.urbanstay.earlycheckin.domain.ReservationRepository;
@@ -99,7 +100,7 @@ public class SampleDataLoader implements ApplicationRunner {
 		}
 		return new Reservation(r.id(), r.guestName(), r.roomType(), r.checkInDate(), r.checkOutDate(),
 				r.checkOutTime() != null ? r.checkOutTime() : policy.standardCheckOutAt(),
-				r.requests() != null ? r.requests() : List.of(), room, r.status(), r.checkedOutAt());
+				r.requests() != null ? r.requests() : List.of(), room, r.status(), r.checkedOutAt(), AccessCodes.token());
 	}
 
 	private SampleData read() {

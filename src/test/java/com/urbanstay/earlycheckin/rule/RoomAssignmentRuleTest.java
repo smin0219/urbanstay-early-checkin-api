@@ -29,7 +29,7 @@ class RoomAssignmentRuleTest {
 
 	private static final CheckInPolicy POLICY = new CheckInPolicy(LocalTime.of(12, 0), LocalTime.of(14, 0),
 			LocalTime.of(13, 30), LocalTime.of(14, 30), LocalTime.of(15, 0), LocalTime.of(11, 0),
-			Duration.ofMinutes(30), 8);
+			Duration.ofMinutes(30), 8, 10_000);
 
 	private final RoomAssignmentRule rule = new RoomAssignmentRule(POLICY);
 

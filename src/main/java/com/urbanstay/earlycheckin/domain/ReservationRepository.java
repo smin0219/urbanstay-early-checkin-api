@@ -2,6 +2,7 @@ package com.urbanstay.earlycheckin.domain;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -15,5 +16,7 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
 	/** [checkIn, checkOut) 기간과 겹치거나 checkIn 전날 밤에 묵은 예약 (배정 후보 판단용) */
 	@Query("select r from Reservation r where r.checkInDate < :checkOut and r.checkOutDate >= :checkIn")
 	List<Reservation> findAround(LocalDate checkIn, LocalDate checkOut);
+
+	Optional<Reservation> findByAccessToken(String accessToken);
 
 }

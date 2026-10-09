@@ -149,7 +149,7 @@ public class ReservationService {
 				r.getCheckOutTime(), (int) ChronoUnit.DAYS.between(r.getCheckInDate(), r.getCheckOutDate()),
 				snapshot.requests(), r.getStatus(), r.getRoom() == null ? null : roomInfo(r.getRoom()),
 				r.getAssignedAt(), engine.expectedCheckIn(snapshot), r.getOfferStatus(), r.getEarlyCheckInAt(),
-				r.getEarlyCheckInFee(), engine.nextStep(ctx, snapshot).orElse(null));
+				r.getEarlyCheckInFee(), engine.nextStep(ctx, snapshot).orElse(null), r.getAccessToken());
 	}
 
 	private static RoomInfo roomInfo(Room room) {

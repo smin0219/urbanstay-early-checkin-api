@@ -10,6 +10,7 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.urbanstay.earlycheckin.common.AccessCodes;
 import com.urbanstay.earlycheckin.domain.MessageLog;
 import com.urbanstay.earlycheckin.domain.MessageLogRepository;
 import com.urbanstay.earlycheckin.domain.MessageType;
@@ -85,17 +86,19 @@ public class RuleEvaluationService {
 					r.sendOffer(now);
 					content += " 객실이 준비되어 있어 얼리체크인을 신청하면 일찍 입실할 수 있습니다.";
 				}
+				content += " 체크인 안내: " + checkInLink(r);
 				log(r, MessageType.NOON_NOTICE, now, content);
 			}
 			case SendEarlyOffer offer -> {
 				r.sendOffer(now);
-				log(r, MessageType.EARLY_OFFER, now,
-						"[어반스테이] " + room + "호가 준비되었습니다. 얼리체크인을 신청하면 일찍 입실할 수 있습니다.");
+				log(r, MessageType.EARLY_OFFER, now, "[어반스테이] " + room
+						+ "호가 준비되었습니다. 얼리체크인을 신청하면 일찍 입실할 수 있습니다. 신청: " + checkInLink(r));
 			}
 			case ExpireOffer expire -> r.expireOffer();
 			case SendPassword password -> {
-				r.sendPassword(now);
-				log(r, MessageType.PASSWORD, now, "[어반스테이] " + room + "호 도어락 비밀번호를 안내드립니다.");
+				r.sendPassword(now, AccessCodes.doorCode());
+				log(r, MessageType.PASSWORD, now,
+						"[어반스테이] " + room + "호 도어락 비밀번호를 보내드립니다. 확인: " + checkInLink(r));
 			}
 			case HoldPassword hold -> r.holdPassword(now);
 			case SendDelayNotice delay -> {
@@ -104,6 +107,10 @@ public class RuleEvaluationService {
 						"[어반스테이] " + room + "호 준비가 늦어지고 있습니다. 준비가 끝나는 즉시 비밀번호를 보내드리겠습니다.");
 			}
 		}
+	}
+
+	private static String checkInLink(Reservation r) {
+		return "/check-in/" + r.getAccessToken();
 	}
 
 	private void log(Reservation reservation, MessageType type, LocalDateTime now, String content) {

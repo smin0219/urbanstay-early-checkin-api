@@ -6,5 +6,7 @@ public enum OfferStatus {
 	/** 결제 완료 */
 	ACCEPTED,
 	DECLINED,
-	EXPIRED
+	EXPIRED,
+	/** 결제 후 객실 문제로 취소·환불 */
+	REFUNDED
 }

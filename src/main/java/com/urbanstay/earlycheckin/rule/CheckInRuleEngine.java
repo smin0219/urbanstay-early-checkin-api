@@ -1,8 +1,10 @@
 package com.urbanstay.earlycheckin.rule;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -203,6 +205,54 @@ public final class CheckInRuleEngine {
 
 	private static Outcome outcome(List<Condition> conditions) {
 		return RuleCheck.allSatisfied(conditions) ? Outcome.MET : Outcome.NOT_MET;
+	}
+
+	/**
+	 * 얼리체크인 입실 시각 선택지: "지금 바로"와 마지막 얼리 입실 시각까지 남은 정각. 예: 12:05 → 지금 바로, 13:00, 14:00.
+	 * 마지막 얼리 입실 시각이 지났으면 빈 목록.
+	 */
+	public List<EarlyCheckInOption> offerOptions(LocalDateTime now) {
+		LocalDateTime deadline = now.toLocalDate().atTime(policy.lastEarlyCheckInAt());
+		if (now.isAfter(deadline)) {
+			return List.of();
+		}
+		List<EarlyCheckInOption> options = new ArrayList<>();
+		options.add(new EarlyCheckInOption(now, true, earlyCheckInFee(now)));
+		for (LocalDateTime hour = now.truncatedTo(ChronoUnit.HOURS).plusHours(1); !hour.isAfter(deadline);
+				hour = hour.plusHours(1)) {
+			options.add(new EarlyCheckInOption(hour, false, earlyCheckInFee(hour)));
+		}
+		return options;
+	}
+
+	/** 올림((기본 체크인 − 입실 시각) / 1시간) × 시간당 요금. 예: 13:20 입실 → 1시간 40분 → 2시간 → 20,000원 */
+	public int earlyCheckInFee(LocalDateTime checkInAt) {
+		LocalDateTime standardCheckIn = checkInAt.toLocalDate().atTime(policy.standardCheckInAt());
+		long minutes = Math.max(0, Duration.between(checkInAt, standardCheckIn).toMinutes());
+		long hours = (minutes + 59) / 60;
+		return Math.toIntExact(hours * policy.earlyCheckInFeePerHour());
+	}
+
+	/**
+	 * 결제 시점에 다시 판단한다. 제안 만료(마지막 얼리 입실 시각 이후), 결제 대기 중인 제안 없음, 이미 지난 입실 시각,
+	 * 선택지에 없는 시각이면 결제를 받지 않는다.
+	 *
+	 * @param checkInAt 고른 입실 시각. "지금 바로"면 현재 시각
+	 */
+	public Optional<PaymentRejection> paymentRejection(LocalDateTime now, ReservationSnapshot r,
+			LocalDateTime checkInAt) {
+		LocalDateTime deadline = now.toLocalDate().atTime(policy.lastEarlyCheckInAt());
+		if (now.isAfter(deadline)) {
+			return Optional.of(PaymentRejection.OFFER_EXPIRED);
+		}
+		if (r.status() != ReservationStatus.OFFER_SENT) {
+			return Optional.of(PaymentRejection.OFFER_NOT_OPEN);
+		}
+		if (checkInAt.isBefore(now)) {
+			return Optional.of(PaymentRejection.TIME_PASSED);
+		}
+		boolean listed = offerOptions(now).stream().anyMatch(option -> option.checkInAt().equals(checkInAt));
+		return listed ? Optional.empty() : Optional.of(PaymentRejection.INVALID_TIME);
 	}
 
 	/** 입실까지 다음에 일어나야 할 일. 입실·퇴실한 예약은 빈 값. */

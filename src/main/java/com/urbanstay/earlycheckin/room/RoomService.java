@@ -107,7 +107,7 @@ public class RoomService {
 		ReservationSnapshot snapshot = RuleContexts.snapshot(r);
 		return new Arrival(r.getId(), r.getGuestName(), r.getStatus(), engine.expectedCheckIn(snapshot),
 				r.getOfferStatus(), r.getEarlyCheckInAt(), r.getEarlyCheckInFee(), r.getCheckedInAt(),
-				engine.nextStep(ctx, snapshot).orElse(null));
+				engine.nextStep(ctx, snapshot).orElse(null), r.getAccessToken());
 	}
 
 	private static Stay stay(Reservation r) {

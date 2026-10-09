@@ -38,9 +38,10 @@ public record RoomDetailResponse(LocalDateTime now, RoomInfo room, Stay inHouse,
 			LocalDateTime scheduledCheckOut, ReservationStatus status, LocalDateTime checkedOutAt) {
 	}
 
+	/** @param checkInToken 고객 화면(/check-in/{token}) 링크 */
 	public record Arrival(long reservationId, String guestName, ReservationStatus status, LocalDateTime checkInAt,
 			OfferStatus offerStatus, LocalDateTime earlyCheckInAt, Integer earlyCheckInFee, LocalDateTime checkedInAt,
-			NextStep nextStep) {
+			NextStep nextStep, String checkInToken) {
 	}
 
 	public enum Action {

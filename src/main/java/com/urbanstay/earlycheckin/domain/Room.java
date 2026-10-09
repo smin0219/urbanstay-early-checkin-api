@@ -60,6 +60,16 @@ public class Room {
 		this.readyAt = now;
 	}
 
+	/** 준비 완료 후 문제 발견 → 다시 청소 */
+	public void reportIssue() {
+		transition(RoomStatus.READY, RoomStatus.CLEANING);
+	}
+
+	/** 도어락 첫 사용으로 고객 입실 */
+	public void occupy() {
+		transition(RoomStatus.READY, RoomStatus.OCCUPIED);
+	}
+
 	private void transition(RoomStatus from, RoomStatus to) {
 		if (status != from) {
 			throw new IllegalStateException(number + "호의 현재 상태(" + status + ")에서는 할 수 없는 작업입니다.");

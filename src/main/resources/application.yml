@@ -32,3 +32,4 @@ urbanstay:
     standard-check-out-at: "11:00"
     early-checkout-threshold: 30m
     high-floor-from: 8
+    early-check-in-fee-per-hour: 10000

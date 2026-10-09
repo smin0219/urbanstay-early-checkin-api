@@ -43,13 +43,14 @@
 | 패키지 | 역할 |
 | --- | --- |
 | `domain` | 엔티티·enum·Repository |
-| `rule` | 순수 규칙 엔진: 체크인 규칙·판단 근거(`CheckInRuleEngine`), 객실 배정 추천(`RoomAssignmentRule`). 정책값 `CheckInPolicy`는 `application.yml`의 `urbanstay.policy` |
+| `rule` | 순수 규칙 엔진: 체크인 규칙·요금·결제 검증·판단 근거(`CheckInRuleEngine`), 객실 배정 추천(`RoomAssignmentRule`). 정책값 `CheckInPolicy`는 `application.yml`의 `urbanstay.policy` |
 | `evaluation` | 엔진 실행·결과 반영 |
 | `clock` | 가상 시계, 시각 이동 API |
 | `scenario` | 샘플 데이터 로더, 시나리오 초기화 API |
 | `dashboard` | 운영 대시보드 조회 API |
 | `reservation` | 예약 상세 조회, 객실 배정 API |
-| `room` | 객실 운영 상세, 객실 이벤트(퇴실, 청소 시작·완료)와 상태 타임라인 |
+| `room` | 객실 운영 상세, 객실 이벤트(퇴실, 청소 시작·완료, 문제 발견, 입실)와 상태 타임라인 |
+| `guest` | 고객 얼리체크인 API (토큰 링크, 결제, 거절, 입실) |
 
 화면 단위 API는 화면별 패키지로 추가한다.
 

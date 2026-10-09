@@ -36,7 +36,7 @@ class CheckInRuleEngineTest {
 
 	private static final CheckInPolicy POLICY = new CheckInPolicy(LocalTime.of(12, 0), LocalTime.of(14, 0),
 			LocalTime.of(13, 30), LocalTime.of(14, 30), LocalTime.of(15, 0), LocalTime.of(11, 0),
-			Duration.ofMinutes(30), 8);
+			Duration.ofMinutes(30), 8, 10_000);
 
 	private final CheckInRuleEngine engine = new CheckInRuleEngine(POLICY);
 
@@ -265,6 +265,78 @@ class CheckInRuleEngineTest {
 			assertThat(nextStep("12:30", List.of(readyRoom("501", "09:00")),
 					arrival(3).in("501").noticed().offer(OfferStatus.DECLINED)))
 				.isEqualTo(new NextStep(NextStep.Type.SEND_PASSWORD, Actor.SYSTEM, at("14:30")));
+		}
+
+	}
+
+	@Nested
+	class 얼리체크인_요금과_선택지 {
+
+		@ParameterizedTest
+		@CsvSource({ "14:00, 10000", "13:00, 20000", "13:20, 20000", "12:05, 30000", "12:00, 30000", "14:59, 10000" })
+		void 기본_체크인까지_남은_시간을_올림해_시간당_요금을_곱한다(String checkInAt, int fee) {
+			assertThat(engine.earlyCheckInFee(at(checkInAt))).isEqualTo(fee);
+		}
+
+		@Test
+		void 지금_바로와_14시까지_남은_정각을_보여준다() {
+			assertThat(engine.offerOptions(at("12:05"))).containsExactly(
+					new EarlyCheckInOption(at("12:05"), true, 30_000),
+					new EarlyCheckInOption(at("13:00"), false, 20_000),
+					new EarlyCheckInOption(at("14:00"), false, 10_000));
+		}
+
+		@Test
+		void 정각에_열면_그_정각은_지금_바로로만_보여준다() {
+			assertThat(engine.offerOptions(at("13:00"))).extracting(EarlyCheckInOption::checkInAt)
+				.containsExactly(at("13:00"), at("14:00"));
+		}
+
+		@Test
+		void 마지막_얼리_입실_시각_정각까지만_선택지가_있다() {
+			assertThat(engine.offerOptions(at("14:00"))).hasSize(1);
+			assertThat(engine.offerOptions(at("14:01"))).isEmpty();
+		}
+
+	}
+
+	@Nested
+	class 결제_검증 {
+
+		private final ReservationSnapshot offered = arrival(1).in("1203").noticed()
+			.status(ReservationStatus.OFFER_SENT).offer(OfferStatus.SENT).build();
+
+		@Test
+		void 지금_바로와_남은_정각은_결제할_수_있다() {
+			assertThat(engine.paymentRejection(at("12:05"), offered, at("12:05"))).isEmpty();
+			assertThat(engine.paymentRejection(at("12:05"), offered, at("13:00"))).isEmpty();
+		}
+
+		@Test
+		void 결제_화면을_연_채_고른_시각이_지나면_받지_않는다() {
+			assertThat(engine.paymentRejection(at("13:05"), offered, at("13:00")))
+				.contains(PaymentRejection.TIME_PASSED);
+		}
+
+		@Test
+		void 선택지에_없는_시각은_받지_않는다() {
+			assertThat(engine.paymentRejection(at("12:05"), offered, at("13:30")))
+				.contains(PaymentRejection.INVALID_TIME);
+			assertThat(engine.paymentRejection(at("12:05"), offered, at("15:00")))
+				.contains(PaymentRejection.INVALID_TIME);
+		}
+
+		@Test
+		void 마지막_얼리_입실_시각이_지나면_제안이_만료된다() {
+			assertThat(engine.paymentRejection(at("14:01"), offered, at("14:01")))
+				.contains(PaymentRejection.OFFER_EXPIRED);
+		}
+
+		@Test
+		void 결제를_기다리는_제안이_없으면_받지_않는다() {
+			assertThat(engine.paymentRejection(at("12:05"),
+					arrival(1).in("1203").noticed().offer(OfferStatus.DECLINED).build(), at("13:00")))
+				.contains(PaymentRejection.OFFER_NOT_OPEN);
 		}
 
 	}

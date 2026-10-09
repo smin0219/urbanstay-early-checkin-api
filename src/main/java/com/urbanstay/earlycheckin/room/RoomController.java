@@ -41,4 +41,11 @@ public class RoomController {
 		return roomService.detail(number);
 	}
 
+	/** 준비 완료 후 문제 발견 (기획상 화면 버튼 없이 API·테스트로만 확인) */
+	@PostMapping("/issue")
+	public RoomDetailResponse reportIssue(@PathVariable String number) {
+		roomEventService.reportIssue(number);
+		return roomService.detail(number);
+	}
+
 }

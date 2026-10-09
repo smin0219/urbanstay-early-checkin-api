@@ -14,6 +14,7 @@ import java.time.LocalTime;
  * @param standardCheckOutAt 기본 퇴실 시각
  * @param earlyCheckoutThreshold 예정 퇴실보다 이만큼 이상 일찍 나가면 조기 퇴실로 본다
  * @param highFloorFrom 이 층 이상이면 고층 요청에 일치한다
+ * @param earlyCheckInFeePerHour 얼리체크인 시간당 요금 (기본 체크인 시각까지 남은 시간을 올림해 곱한다)
  */
 public record CheckInPolicy(
 		LocalTime noonNoticeAt,
@@ -23,5 +24,6 @@ public record CheckInPolicy(
 		LocalTime standardCheckInAt,
 		LocalTime standardCheckOutAt,
 		Duration earlyCheckoutThreshold,
-		int highFloorFrom) {
+		int highFloorFrom,
+		int earlyCheckInFeePerHour) {
 }

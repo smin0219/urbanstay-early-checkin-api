@@ -24,11 +24,12 @@ public record ReservationDetailResponse(LocalDateTime now, Detail reservation, L
 	/**
 	 * @param room 배정(또는 투숙) 객실. 미배정이면 null
 	 * @param checkInAt 입실 예정 시각 (얼리 확정이면 결제한 시각)
+	 * @param checkInToken 고객 화면(/check-in/{token}) 링크
 	 */
 	public record Detail(long id, String guestName, RoomType roomType, LocalDate checkInDate, LocalDate checkOutDate,
 			LocalTime checkOutTime, int nights, List<RoomRequest> requests, ReservationStatus status, RoomInfo room,
 			LocalDateTime assignedAt, LocalDateTime checkInAt, OfferStatus offerStatus, LocalDateTime earlyCheckInAt,
-			Integer earlyCheckInFee, NextStep nextStep) {
+			Integer earlyCheckInFee, NextStep nextStep, String checkInToken) {
 	}
 
 	public record RoomInfo(String number, RoomType type, int floor, RoomView view, RoomStatus status,

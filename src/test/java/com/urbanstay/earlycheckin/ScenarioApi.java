@@ -10,6 +10,8 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 
+import com.urbanstay.earlycheckin.reservation.ReservationDetailResponse;
+
 /** 통합 테스트에서 시나리오를 API로 재생하는 도우미. 시각은 데모일(2026-10-10)의 "HH:mm"으로 쓴다. */
 final class ScenarioApi {
 
@@ -53,6 +55,10 @@ final class ScenarioApi {
 
 	<T> T read(MvcTestResult result, Class<T> type) {
 		return result.assertThat().hasStatusOk().bodyJson().convertTo(type).actual();
+	}
+
+	String checkInToken(long reservationId) {
+		return get("/api/reservations/" + reservationId, ReservationDetailResponse.class).reservation().checkInToken();
 	}
 
 }

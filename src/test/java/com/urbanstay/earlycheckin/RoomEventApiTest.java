@@ -12,9 +12,12 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.HttpStatus;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 
+import com.urbanstay.earlycheckin.dashboard.DashboardResponse;
+import com.urbanstay.earlycheckin.domain.OfferStatus;
 import com.urbanstay.earlycheckin.domain.ReservationStatus;
 import com.urbanstay.earlycheckin.domain.RoomEvent;
 import com.urbanstay.earlycheckin.domain.RoomStatus;
+import com.urbanstay.earlycheckin.guest.GuestCheckInResponse;
 import com.urbanstay.earlycheckin.room.RoomDetailResponse;
 import com.urbanstay.earlycheckin.room.RoomDetailResponse.Action;
 import com.urbanstay.earlycheckin.room.RoomDetailResponse.TimelineEntry;
@@ -76,6 +79,30 @@ class RoomEventApiTest {
 		assertThat(offer.conditions()).filteredOn(c -> !c.satisfied())
 			.extracting(RuleCheck.Condition::type)
 			.containsExactly(RuleCheck.Condition.Type.ROOM_READY, RuleCheck.Condition.Type.AVAILABLE_BY_DEADLINE);
+	}
+
+	@Test
+	void 결제_후_객실_문제를_발견하면_얼리체크인을_취소하고_환불한다() {
+		// 이서연(501호)이 12:05에 13:00 입실을 결제한 뒤 12:30에 문제 발견
+		String token = api.checkInToken(3);
+		api.advanceTo("12:05");
+		assertThat(api.post("/api/check-in/" + token + "/payment",
+				"{\"checkInAt\": \"" + at("13:00") + "\", \"expectedFee\": 20000, \"idempotencyKey\": \"k\"}"))
+			.hasStatusOk();
+
+		RoomDetailResponse room = api.read(api.postAt("12:30", "/api/rooms/501/issue", null), RoomDetailResponse.class);
+
+		assertThat(room.room().status()).isEqualTo(RoomStatus.CLEANING);
+		GuestCheckInResponse guest = api.get("/api/check-in/" + token, GuestCheckInResponse.class);
+		assertThat(guest.offerStatus()).isEqualTo(OfferStatus.REFUNDED);
+		assertThat(guest.stage()).isEqualTo(GuestCheckInResponse.Stage.WAITING_PASSWORD);
+		DashboardResponse.Summary summary = api.get("/api/dashboard", DashboardResponse.class).summary();
+		assertThat(summary.earlyConfirmed()).isZero();
+		assertThat(summary.earlyRevenue()).isZero();
+
+		// 13:00이 되어도 미준비라 비밀번호를 보내지 않는다
+		api.advanceTo("13:00");
+		assertThat(api.get("/api/check-in/" + token, GuestCheckInResponse.class).password()).isNull();
 	}
 
 	private RoomDetailResponse room(String number) {
