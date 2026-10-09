@@ -35,6 +35,10 @@ H2 콘솔: http://localhost:8080/h2-console
 | GET | `/api/reservations/{id}` | 예약 상세: 예약 정보, 이 예약의 운영자 알림, 추천 객실(요청 항목별 일치)과 제외된 객실(제외 이유) |
 | POST | `/api/reservations/{id}/assignment` | 추천 객실로 배정. 본문 `{"roomNumber": "1203"}`, 정오 안내 발송 후에는 409 |
 | DELETE | `/api/reservations/{id}/assignment` | 배정 취소 (배정 대기로 되돌림), 정오 안내 발송 후에는 409 |
+| GET | `/api/rooms/{number}` | 객실 운영 상세: 오늘 퇴실·투숙·입실 예약, 규칙 엔진 판단 근거(조건별 충족 여부), 상태 타임라인, 발송 로그 |
+| POST | `/api/rooms/{number}/checkout` | 이전 투숙객 퇴실 (퇴실 감지 목업) |
+| POST | `/api/rooms/{number}/cleaning/start` | 청소 시작 (조기 퇴실 알림 해제) |
+| POST | `/api/rooms/{number}/cleaning/finish` | 청소 완료 → 준비 완료. 조건이 맞으면 제안·비밀번호가 바로 나간다 |
 
 시계를 옮기면 그 사이의 규칙 시각(12:00, 13:30, 14:30, 15:00)을 차례로 거치며 규칙을 평가하므로, 한 번에 크게 건너뛰어도 발송 기록은 원래 시각으로 남습니다. 정책 시각은 `application.yml`의 `urbanstay.policy`에서 바꿉니다.
 

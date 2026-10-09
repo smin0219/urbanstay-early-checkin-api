@@ -46,6 +46,15 @@ public record RuleContext(LocalDateTime now, Map<String, RoomSnapshot> rooms, Li
 		return Optional.ofNullable(reservation.roomNumber()).map(rooms::get);
 	}
 
+	/** 이 객실에 배정된 오늘 입실 예약 (이미 입실했어도 포함) */
+	public Optional<ReservationSnapshot> arrivalTo(String roomNumber) {
+		return reservations.stream()
+			.filter(r -> Objects.equals(r.roomNumber(), roomNumber))
+			.filter(r -> r.checkInDate().equals(today()))
+			.filter(r -> r.status() != ReservationStatus.CHECKED_OUT)
+			.findFirst();
+	}
+
 	/** 이 객실에서 오늘 퇴실하는(또는 이미 퇴실한) 이전 투숙객 예약 */
 	public Optional<ReservationSnapshot> departureFrom(String roomNumber) {
 		return reservations.stream()

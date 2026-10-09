@@ -148,6 +148,12 @@ public class Reservation {
 		this.delayNoticeSentAt = now;
 	}
 
+	public void checkOut(LocalDateTime now) {
+		requireStatus(ReservationStatus.CHECKED_IN);
+		this.status = ReservationStatus.CHECKED_OUT;
+		this.checkedOutAt = now;
+	}
+
 	private void requireStatus(ReservationStatus expected) {
 		if (status != expected) {
 			throw new IllegalStateException("예약 " + id + " 상태가 " + expected + "가 아닙니다: " + status);

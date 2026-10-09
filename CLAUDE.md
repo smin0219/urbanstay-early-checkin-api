@@ -36,18 +36,20 @@
   - 이벤트: 퇴실, 청소 완료, 결제
 - 엔진(`rule` 패키지)은 엔티티 대신 스냅샷(`RuleContext`)을 받아 할 일(`RuleAction`)을 돌려준다. 적용(상태 변경·발송 기록)은 `evaluation.RuleEvaluationService.evaluate()`가 하므로, 새 이벤트 API도 상태를 바꾼 뒤 이 메서드를 호출한다.
 - 운영자 알림과 "다음 할 일"은 저장하지 않고 현재 상태에서 매번 계산한다 (조건이 풀리면 자동 해제).
+- 판단 조건은 엔진 안의 조건 함수 하나로 실제 판단(`evaluate`, `alerts`)과 판단 근거 표시(`explain`)에 함께 쓴다. 규칙을 바꿀 때 조건 함수만 고친다.
 
 ## 패키지
 
 | 패키지 | 역할 |
 | --- | --- |
 | `domain` | 엔티티·enum·Repository |
-| `rule` | 순수 규칙 엔진: 체크인 규칙(`CheckInRuleEngine`), 객실 배정 추천(`RoomAssignmentRule`). 정책값 `CheckInPolicy`는 `application.yml`의 `urbanstay.policy` |
+| `rule` | 순수 규칙 엔진: 체크인 규칙·판단 근거(`CheckInRuleEngine`), 객실 배정 추천(`RoomAssignmentRule`). 정책값 `CheckInPolicy`는 `application.yml`의 `urbanstay.policy` |
 | `evaluation` | 엔진 실행·결과 반영 |
 | `clock` | 가상 시계, 시각 이동 API |
 | `scenario` | 샘플 데이터 로더, 시나리오 초기화 API |
 | `dashboard` | 운영 대시보드 조회 API |
 | `reservation` | 예약 상세 조회, 객실 배정 API |
+| `room` | 객실 운영 상세, 객실 이벤트(퇴실, 청소 시작·완료)와 상태 타임라인 |
 
 화면 단위 API는 화면별 패키지로 추가한다.
 

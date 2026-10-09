@@ -3,6 +3,7 @@ package com.urbanstay.earlycheckin.scenario;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -19,7 +20,10 @@ import com.urbanstay.earlycheckin.domain.MessageLogRepository;
 import com.urbanstay.earlycheckin.domain.Reservation;
 import com.urbanstay.earlycheckin.domain.ReservationRepository;
 import com.urbanstay.earlycheckin.domain.Room;
+import com.urbanstay.earlycheckin.domain.RoomEvent;
 import com.urbanstay.earlycheckin.domain.RoomRepository;
+import com.urbanstay.earlycheckin.domain.RoomStatusChange;
+import com.urbanstay.earlycheckin.domain.RoomStatusChangeRepository;
 import com.urbanstay.earlycheckin.rule.CheckInPolicy;
 
 import jakarta.persistence.EntityManager;
@@ -44,6 +48,8 @@ public class SampleDataLoader implements ApplicationRunner {
 
 	private final MessageLogRepository messageLogRepository;
 
+	private final RoomStatusChangeRepository roomStatusChangeRepository;
+
 	private final ClockService clockService;
 
 	private final CheckInPolicy policy;
@@ -59,6 +65,7 @@ public class SampleDataLoader implements ApplicationRunner {
 	@Transactional
 	public void load() {
 		messageLogRepository.deleteAllInBatch();
+		roomStatusChangeRepository.deleteAllInBatch();
 		reservationRepository.deleteAll();
 		reservationRepository.flush();
 		roomRepository.deleteAllInBatch();
@@ -74,6 +81,12 @@ public class SampleDataLoader implements ApplicationRunner {
 			.stream()
 			.collect(Collectors.toMap(Room::getNumber, Function.identity()));
 		reservationRepository.saveAll(data.reservations().stream().map(r -> toReservation(r, rooms)).toList());
+		// 상태 타임라인의 시작점
+		LocalDateTime start = clockService.now();
+		roomStatusChangeRepository.saveAll(rooms.values()
+			.stream()
+			.map(room -> new RoomStatusChange(room.getNumber(), null, room.getStatus(), RoomEvent.INITIAL, start, null))
+			.toList());
 	}
 
 	private Reservation toReservation(SampleData.ReservationData r, Map<String, Room> rooms) {

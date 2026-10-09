@@ -269,6 +269,48 @@ class CheckInRuleEngineTest {
 
 	}
 
+	@Nested
+	class 판단_근거 {
+
+		@Test
+		void 제안하지_않은_이유를_조건별로_보여준다() {
+			// 14:10 준비 완료: 다른 조건은 맞지만 입실 가능 시각이 14:00을 넘었다
+			RuleContext ctx = context("14:10", List.of(readyRoom("1203", "14:10")), arrival(1).in("1203").noticed());
+
+			RuleCheck offer = engine.explain(ctx, "1203").getFirst();
+			assertThat(offer.rule()).isEqualTo(RuleCheck.Rule.EARLY_OFFER);
+			assertThat(offer.outcome()).isEqualTo(RuleCheck.Outcome.NOT_MET);
+			assertThat(offer.conditions()).filteredOn(c -> !c.satisfied())
+				.extracting(RuleCheck.Condition::type)
+				.containsExactly(RuleCheck.Condition.Type.AVAILABLE_BY_DEADLINE);
+		}
+
+		@Test
+		void 판단_근거와_실제_알림이_같다() {
+			RuleContext ctx = context("09:40", List.of(room("1203", RoomStatus.CLEANING_PENDING)),
+					arrival(1).in("1203"), departed(101, "1203", "09:40"));
+
+			assertThat(engine.explain(ctx, "1203")).filteredOn(c -> c.rule() == RuleCheck.Rule.EARLY_CHECKOUT)
+				.extracting(RuleCheck::outcome)
+				.containsExactly(RuleCheck.Outcome.MET);
+			assertThat(engine.alerts(ctx)).extracting(OperatorAlert::type)
+				.containsExactly(OperatorAlert.Type.EARLY_CHECKOUT);
+		}
+
+		@Test
+		void 발송된_제안과_비밀번호는_완료로_보여준다() {
+			RuleContext ctx = context("13:05", List.of(readyRoom("1203", "11:10")), arrival(1).in("1203").noticed()
+				.status(ReservationStatus.PASSWORD_SENT).offer(OfferStatus.ACCEPTED).earlyAt("13:00"));
+
+			assertThat(engine.explain(ctx, "1203")).extracting(RuleCheck::rule, RuleCheck::outcome)
+				.containsExactly(
+						tuple(RuleCheck.Rule.EARLY_OFFER, RuleCheck.Outcome.DONE),
+						tuple(RuleCheck.Rule.PASSWORD, RuleCheck.Outcome.DONE),
+						tuple(RuleCheck.Rule.CLEANING_WARNING, RuleCheck.Outcome.NOT_MET));
+		}
+
+	}
+
 	@Test
 	void 시계_이동_사이의_규칙_시각과_얼리_입실_시각을_거쳐_간다() {
 		RuleContext ctx = context("09:30", List.of(readyRoom("1203", "11:10")), arrival(1).in("1203").noticed()

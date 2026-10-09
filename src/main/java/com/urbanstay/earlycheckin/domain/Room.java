@@ -46,4 +46,25 @@ public class Room {
 		return status == RoomStatus.READY;
 	}
 
+	/** 이전 투숙객 퇴실 */
+	public void checkOut() {
+		transition(RoomStatus.OCCUPIED, RoomStatus.CLEANING_PENDING);
+	}
+
+	public void startCleaning() {
+		transition(RoomStatus.CLEANING_PENDING, RoomStatus.CLEANING);
+	}
+
+	public void finishCleaning(LocalDateTime now) {
+		transition(RoomStatus.CLEANING, RoomStatus.READY);
+		this.readyAt = now;
+	}
+
+	private void transition(RoomStatus from, RoomStatus to) {
+		if (status != from) {
+			throw new IllegalStateException(number + "호의 현재 상태(" + status + ")에서는 할 수 없는 작업입니다.");
+		}
+		this.status = to;
+	}
+
 }

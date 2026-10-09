@@ -20,6 +20,10 @@ import com.urbanstay.earlycheckin.rule.RuleAction.SendDelayNotice;
 import com.urbanstay.earlycheckin.rule.RuleAction.SendEarlyOffer;
 import com.urbanstay.earlycheckin.rule.RuleAction.SendNoonNotice;
 import com.urbanstay.earlycheckin.rule.RuleAction.SendPassword;
+import com.urbanstay.earlycheckin.rule.RuleCheck.Condition;
+import com.urbanstay.earlycheckin.rule.RuleCheck.Condition.Type;
+import com.urbanstay.earlycheckin.rule.RuleCheck.Outcome;
+import com.urbanstay.earlycheckin.rule.RuleCheck.Rule;
 
 /**
  * 체크인 규칙 엔진. 현재 시각과 객실·예약 상태만 보고 판단하며, 스프링·DB·시스템 시계에 의존하지 않는다.
@@ -64,7 +68,7 @@ public final class CheckInRuleEngine {
 				}
 				yield room.isReady() ? new SendPassword(id) : new HoldPassword(id);
 			}
-			case EARLY_CONFIRMED -> room.isReady() && !now.isBefore(r.earlyCheckInAt()) ? new SendPassword(id) : null;
+			case EARLY_CONFIRMED -> RuleCheck.allSatisfied(passwordConditions(now, r, room)) ? new SendPassword(id) : null;
 			case PASSWORD_HELD -> {
 				if (room.isReady()) {
 					yield new SendPassword(id);
@@ -77,20 +81,56 @@ public final class CheckInRuleEngine {
 		return Optional.ofNullable(action);
 	}
 
-	/**
-	 * 얼리체크인 제안 조건: 배정된 오늘 예약, 객실 준비 완료, 정오 안내 시각 이후, 입실 가능 시각(준비 완료와 현재 중
-	 * 늦은 쪽)이 마지막 얼리 입실 시각 이전, 이 예약에 보낸 제안 없음.
-	 */
 	private boolean canOffer(LocalDateTime now, ReservationSnapshot r, RoomSnapshot room) {
+		return r.status() == ReservationStatus.ASSIGNED && RuleCheck.allSatisfied(offerConditions(now, r, room));
+	}
+
+	// 판단 조건. 실제 판단(evaluate, alerts)과 판단 근거 표시(explain)가 같은 조건 함수를 쓴다.
+
+	/** 얼리체크인 제안 조건 (기획서 "2. 얼리체크인 제안" 표) */
+	private List<Condition> offerConditions(LocalDateTime now, ReservationSnapshot r, RoomSnapshot room) {
 		LocalDate today = now.toLocalDate();
-		if (r.status() != ReservationStatus.ASSIGNED || r.offerStatus() != null || !room.isReady()) {
-			return false;
-		}
-		if (now.isBefore(today.atTime(policy.noonNoticeAt()))) {
-			return false;
-		}
-		LocalDateTime availableAt = latest(room.readyAt(), now);
-		return !availableAt.isAfter(today.atTime(policy.lastEarlyCheckInAt()));
+		LocalDateTime noon = today.atTime(policy.noonNoticeAt());
+		LocalDateTime deadline = today.atTime(policy.lastEarlyCheckInAt());
+		// 입실 가능 시각은 준비 완료 시각과 현재 시각 중 늦은 쪽
+		LocalDateTime availableAt = room.isReady() ? latest(room.readyAt(), now) : null;
+		return List.of(
+				Condition.of(Type.CHECK_IN_TODAY, r.checkInDate().equals(today)),
+				Condition.of(Type.ROOM_ASSIGNED, room.number().equals(r.roomNumber())),
+				new Condition(Type.ROOM_READY, room.isReady(), room.isReady() ? room.readyAt() : null, null),
+				new Condition(Type.NOON_REACHED, !now.isBefore(noon), now, noon),
+				new Condition(Type.AVAILABLE_BY_DEADLINE, availableAt != null && !availableAt.isAfter(deadline),
+						availableAt, deadline),
+				Condition.of(Type.NO_PREVIOUS_OFFER, r.offerStatus() == null));
+	}
+
+	/** 비밀번호 발송 조건: 객실 준비 완료, 발송 시각(얼리 확정이면 결제한 입실 시각) 도달 */
+	private List<Condition> passwordConditions(LocalDateTime now, ReservationSnapshot r, RoomSnapshot room) {
+		LocalDateTime sendAt = r.status() == ReservationStatus.EARLY_CONFIRMED ? r.earlyCheckInAt()
+				: r.checkInDate().atTime(policy.passwordSendAt());
+		return List.of(
+				new Condition(Type.ROOM_READY, room.isReady(), room.isReady() ? room.readyAt() : null, null),
+				new Condition(Type.SEND_TIME_REACHED, !now.isBefore(sendAt), now, sendAt));
+	}
+
+	/** 청소 지연 경고 조건: 경고 시각 도달, 객실 미준비 */
+	private List<Condition> cleaningWarningConditions(LocalDateTime now, RoomSnapshot room) {
+		LocalDateTime warningAt = now.toLocalDate().atTime(policy.cleaningWarningAt());
+		return List.of(
+				new Condition(Type.WARNING_TIME_REACHED, !now.isBefore(warningAt), now, warningAt),
+				Condition.of(Type.ROOM_NOT_READY, !room.isReady()));
+	}
+
+	/** 조기 퇴실 알림 조건: 예정 퇴실보다 기준 이상 일찍 퇴실, 오늘 입실 예약 있음, 아직 청소 시작 전 */
+	private List<Condition> earlyCheckoutConditions(ReservationSnapshot departure, boolean hasArrival,
+			RoomSnapshot room) {
+		LocalDateTime limit = departure.scheduledCheckOut().minus(policy.earlyCheckoutThreshold());
+		boolean checkedOut = departure.status() == ReservationStatus.CHECKED_OUT && departure.checkedOutAt() != null;
+		return List.of(
+				new Condition(Type.CHECKED_OUT_EARLY, checkedOut && !departure.checkedOutAt().isAfter(limit),
+						departure.checkedOutAt(), limit),
+				Condition.of(Type.HAS_ARRIVAL_TODAY, hasArrival),
+				Condition.of(Type.CLEANING_NOT_STARTED, room.status() == RoomStatus.CLEANING_PENDING));
 	}
 
 	/** 지금 떠 있어야 할 운영자 알림. 유형 순서, 발생 시각 순으로 정렬한다. */
@@ -110,8 +150,11 @@ public final class CheckInRuleEngine {
 				continue;
 			}
 			RoomSnapshot room = assigned.get();
-			earlyCheckout(ctx, arrival, room).ifPresent(alerts::add);
-			if (!room.isReady() && !now.isBefore(warningAt)) {
+			ctx.departureFrom(room.number())
+				.filter(d -> RuleCheck.allSatisfied(earlyCheckoutConditions(d, true, room)))
+				.ifPresent(d -> alerts.add(new OperatorAlert(OperatorAlert.Type.EARLY_CHECKOUT, Level.NOTICE,
+						room.number(), arrival.id(), d.checkedOutAt())));
+			if (RuleCheck.allSatisfied(cleaningWarningConditions(now, room))) {
 				boolean overdue = !now.isBefore(standardCheckIn);
 				alerts.add(new OperatorAlert(OperatorAlert.Type.CLEANING_DELAY, overdue ? Level.CRITICAL : Level.WARNING,
 						room.number(), arrival.id(), overdue ? standardCheckIn : warningAt));
@@ -126,16 +169,40 @@ public final class CheckInRuleEngine {
 		return alerts;
 	}
 
-	/** 이전 투숙객이 예정보다 기준 이상 일찍 퇴실했고 아직 청소를 시작하지 않은 객실 */
-	private Optional<OperatorAlert> earlyCheckout(RuleContext ctx, ReservationSnapshot arrival, RoomSnapshot room) {
-		if (room.status() != RoomStatus.CLEANING_PENDING) {
-			return Optional.empty();
+	/**
+	 * 객실 하나에 대해 규칙별 판단 근거. 오늘 입실 예약이 있으면 제안·비밀번호·청소 지연 규칙을, 오늘 퇴실한 투숙객이
+	 * 있으면 조기 퇴실 규칙을 담는다.
+	 */
+	public List<RuleCheck> explain(RuleContext ctx, String roomNumber) {
+		RoomSnapshot room = ctx.rooms().get(roomNumber);
+		if (room == null) {
+			return List.of();
 		}
-		return ctx.departureFrom(room.number())
-			.filter(d -> d.status() == ReservationStatus.CHECKED_OUT && d.checkedOutAt() != null)
-			.filter(d -> !d.checkedOutAt().isAfter(d.scheduledCheckOut().minus(policy.earlyCheckoutThreshold())))
-			.map(d -> new OperatorAlert(OperatorAlert.Type.EARLY_CHECKOUT, Level.NOTICE, room.number(), arrival.id(),
-					d.checkedOutAt()));
+		LocalDateTime now = ctx.now();
+		Optional<ReservationSnapshot> arrival = ctx.arrivalTo(roomNumber);
+		List<RuleCheck> checks = new ArrayList<>();
+		arrival.ifPresent(r -> {
+			boolean checkedIn = r.status() == ReservationStatus.CHECKED_IN;
+			List<Condition> offer = offerConditions(now, r, room);
+			checks.add(new RuleCheck(Rule.EARLY_OFFER,
+					r.offerStatus() != null ? Outcome.DONE : outcome(offer), offer));
+			List<Condition> password = passwordConditions(now, r, room);
+			boolean passwordSent = r.status() == ReservationStatus.PASSWORD_SENT || checkedIn;
+			checks.add(new RuleCheck(Rule.PASSWORD, passwordSent ? Outcome.DONE : outcome(password), password));
+			if (!checkedIn) {
+				List<Condition> warning = cleaningWarningConditions(now, room);
+				checks.add(new RuleCheck(Rule.CLEANING_WARNING, outcome(warning), warning));
+			}
+		});
+		ctx.departureFrom(roomNumber).ifPresent(d -> {
+			List<Condition> early = earlyCheckoutConditions(d, arrival.isPresent(), room);
+			checks.add(new RuleCheck(Rule.EARLY_CHECKOUT, outcome(early), early));
+		});
+		return checks;
+	}
+
+	private static Outcome outcome(List<Condition> conditions) {
+		return RuleCheck.allSatisfied(conditions) ? Outcome.MET : Outcome.NOT_MET;
 	}
 
 	/** 입실까지 다음에 일어나야 할 일. 입실·퇴실한 예약은 빈 값. */
