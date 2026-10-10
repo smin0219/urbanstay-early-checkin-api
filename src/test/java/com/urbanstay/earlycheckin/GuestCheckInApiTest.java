@@ -2,6 +2,7 @@ package com.urbanstay.earlycheckin;
 
 import static com.urbanstay.earlycheckin.ScenarioApi.at;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 import java.time.LocalDateTime;
 
@@ -15,17 +16,24 @@ import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 
 import com.urbanstay.earlycheckin.dashboard.DashboardResponse;
+import com.urbanstay.earlycheckin.domain.MessageLog;
+import com.urbanstay.earlycheckin.domain.MessageLogRepository;
+import com.urbanstay.earlycheckin.domain.MessageType;
 import com.urbanstay.earlycheckin.domain.OfferStatus;
 import com.urbanstay.earlycheckin.guest.GuestCheckInResponse;
 import com.urbanstay.earlycheckin.guest.GuestCheckInResponse.Stage;
+import com.urbanstay.earlycheckin.rule.EarlyCheckInOption;
 
-/** 이서연 예약(id 3, 501호 전날 공실)으로 고객 화면 API의 경계 상황을 확인한다. 501호는 정오에 제안을 받는다. */
+/** 이서연 예약(id 3, 501호 전날 공실)으로 고객 화면 API의 경계 상황을 확인한다. 501호는 시작 시각(09:30)에 제안을 받는다. */
 @SpringBootTest
 @AutoConfigureMockMvc
 class GuestCheckInApiTest {
 
 	@Autowired
 	private MockMvcTester mvc;
+
+	@Autowired
+	private MessageLogRepository messageLogRepository;
 
 	private ScenarioApi api;
 
@@ -39,12 +47,35 @@ class GuestCheckInApiTest {
 	}
 
 	@Test
-	void 정오_안내_전에는_호수와_비밀번호를_보여주지_않는다() {
+	void 정오_전에_받은_제안에는_호수와_비밀번호를_보여주지_않는다() {
 		GuestCheckInResponse view = view();
 
-		assertThat(view.stage()).isEqualTo(Stage.BEFORE_NOTICE);
+		assertThat(view.stage()).isEqualTo(Stage.OFFER_OPEN);
 		assertThat(view.room()).isNull();
 		assertThat(view.password()).isNull();
+		assertThat(view.offer().options())
+			.extracting(EarlyCheckInOption::checkInAt, EarlyCheckInOption::immediate, EarlyCheckInOption::fee)
+			.containsExactly(tuple(at("09:30"), true, 40_000), tuple(at("12:00"), false, 30_000),
+					tuple(at("13:00"), false, 20_000), tuple(at("14:00"), false, 10_000));
+	}
+
+	@Test
+	void 정오_전에_지금_바로_결제하면_호수와_비밀번호를_바로_받고_정오_안내는_보내지_않는다() {
+		api.advanceTo("10:00");
+
+		GuestCheckInResponse view = api.read(api.post(paymentUri(), payment(null, 40_000, "now")),
+				GuestCheckInResponse.class);
+
+		assertThat(view.stage()).isEqualTo(Stage.PASSWORD_READY);
+		assertThat(view.room().number()).isEqualTo("501");
+		assertThat(view.earlyCheckIn().checkInAt()).isEqualTo(at("10:00"));
+		api.advanceTo("12:10");
+		assertThat(messageLogRepository.findByRoomNumberOrderBySentAtAscIdAsc("501"))
+			.extracting(MessageLog::getType, MessageLog::getSentAt)
+			.containsExactly(
+					tuple(MessageType.EARLY_OFFER, at("09:30")),
+					tuple(MessageType.EARLY_CONFIRMATION, at("10:00")),
+					tuple(MessageType.PASSWORD, at("10:00")));
 	}
 
 	@Test
@@ -61,39 +92,25 @@ class GuestCheckInApiTest {
 	}
 
 	@Test
-	void 지금_바로_결제하면_비밀번호가_바로_나간다() {
+	void 화면에_보인_요금과_다르면_결제하지_않는다() {
 		api.advanceTo("12:05");
 
-		GuestCheckInResponse view = api.read(api.post(paymentUri(), payment(null, 30_000, "now")),
-				GuestCheckInResponse.class);
-
-		assertThat(view.stage()).isEqualTo(Stage.PASSWORD_READY);
-		assertThat(view.earlyCheckIn().checkInAt()).isEqualTo(at("12:05"));
-	}
-
-	@Test
-	void 화면을_연_채_시간이_지나_요금이_바뀌면_결제하지_않는다() {
-		api.advanceTo("13:01");
-
-		// 12시대에 본 "지금 바로" 30,000원은 13:01에는 20,000원이다
-		MvcTestResult result = api.post(paymentUri(), payment(null, 30_000, "stale"));
-
-		assertThat(result).hasStatus(HttpStatus.CONFLICT);
+		assertThat(api.post(paymentUri(), payment(at("13:00"), 30_000, "wrong-fee"))).hasStatus(HttpStatus.CONFLICT);
 		assertThat(view().stage()).isEqualTo(Stage.OFFER_OPEN);
 	}
 
 	@Test
-	void 고른_입실_시각이_지나면_결제하지_않는다() {
-		api.advanceTo("13:05");
+	void 고른_정각이_되면_결제하지_않는다() {
+		api.advanceTo("13:00");
 
 		assertThat(api.post(paymentUri(), payment(at("13:00"), 20_000, "late"))).hasStatus(HttpStatus.CONFLICT);
 	}
 
 	@Test
-	void 마지막_얼리_입실_시각이_지나면_결제를_막고_비밀번호_발송_시각을_안내한다() {
-		api.advanceTo("14:10");
+	void 마지막_얼리_입실_정각이_되면_결제를_막고_비밀번호_발송_시각을_안내한다() {
+		api.advanceTo("14:00");
 
-		MvcTestResult result = api.post(paymentUri(), payment(null, 10_000, "expired"));
+		MvcTestResult result = api.post(paymentUri(), payment(at("14:00"), 10_000, "expired"));
 
 		assertThat(result).hasStatus(HttpStatus.CONFLICT)
 			.bodyJson()
@@ -147,6 +164,7 @@ class GuestCheckInApiTest {
 		return base() + "/payment";
 	}
 
+	/** checkInAt이 null이면 "지금 바로" */
 	private static String payment(LocalDateTime checkInAt, int fee, String key) {
 		String time = checkInAt == null ? "null" : "\"" + checkInAt + "\"";
 		return "{\"checkInAt\": " + time + ", \"expectedFee\": " + fee + ", \"idempotencyKey\": \"" + key + "\"}";

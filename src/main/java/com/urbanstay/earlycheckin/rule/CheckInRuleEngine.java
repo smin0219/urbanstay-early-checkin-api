@@ -53,14 +53,12 @@ public final class CheckInRuleEngine {
 	private Optional<RuleAction> decide(LocalDateTime now, ReservationSnapshot r, RoomSnapshot room) {
 		LocalDate today = now.toLocalDate();
 		long id = r.id();
-		if (r.noonNoticeSentAt() == null) {
-			if (now.isBefore(today.atTime(policy.noonNoticeAt()))) {
-				return Optional.empty();
-			}
-			return Optional.of(new SendNoonNotice(id, canOffer(now, r, room)));
+		if (needsNoonNotice(now, r)) {
+			return Optional.of(new SendNoonNotice(id));
 		}
 		RuleAction action = switch (r.status()) {
-			case OFFER_SENT -> now.isAfter(today.atTime(policy.lastEarlyCheckInAt())) ? new ExpireOffer(id) : null;
+			// 결제는 고른 정각 전까지라, 마지막 얼리 입실 정각이 되면 고를 시각이 없다
+			case OFFER_SENT -> !now.isBefore(today.atTime(policy.lastEarlyCheckInAt())) ? new ExpireOffer(id) : null;
 			case ASSIGNED -> {
 				if (canOffer(now, r, room)) {
 					yield new SendEarlyOffer(id);
@@ -83,27 +81,58 @@ public final class CheckInRuleEngine {
 		return Optional.ofNullable(action);
 	}
 
+	/** 정오가 지났고 아직 호수를 안내받지 않은 예약. 정오 전에 얼리체크인을 결제한 예약은 결제 확정 때 안내받았다. */
+	private boolean needsNoonNotice(LocalDateTime now, ReservationSnapshot r) {
+		return r.noonNoticeSentAt() == null && r.paidAt() == null
+				&& !now.isBefore(now.toLocalDate().atTime(policy.noonNoticeAt()));
+	}
+
 	private boolean canOffer(LocalDateTime now, ReservationSnapshot r, RoomSnapshot room) {
 		return r.status() == ReservationStatus.ASSIGNED && RuleCheck.allSatisfied(offerConditions(now, r, room));
 	}
 
 	// 판단 조건. 실제 판단(evaluate, alerts)과 판단 근거 표시(explain)가 같은 조건 함수를 쓴다.
 
-	/** 얼리체크인 제안 조건 (기획서 "2. 얼리체크인 제안" 표) */
+	/**
+	 * 얼리체크인 제안 조건. 객실이 준비되면 제안 시작 시각부터 바로 보내되, 팔 수 있는 첫 입실 시각이 마지막 얼리 입실 정각을
+	 * 넘으면 보내지 않는다.
+	 */
 	private List<Condition> offerConditions(LocalDateTime now, ReservationSnapshot r, RoomSnapshot room) {
 		LocalDate today = now.toLocalDate();
-		LocalDateTime noon = today.atTime(policy.noonNoticeAt());
+		LocalDateTime offerStart = today.atTime(policy.offerStartAt());
 		LocalDateTime deadline = today.atTime(policy.lastEarlyCheckInAt());
-		// 입실 가능 시각은 준비 완료 시각과 현재 시각 중 늦은 쪽
-		LocalDateTime availableAt = room.isReady() ? latest(room.readyAt(), now) : null;
+		LocalDateTime firstAvailable = room.isReady() ? firstAvailable(now) : null;
 		return List.of(
 				Condition.of(Type.CHECK_IN_TODAY, r.checkInDate().equals(today)),
 				Condition.of(Type.ROOM_ASSIGNED, room.number().equals(r.roomNumber())),
 				new Condition(Type.ROOM_READY, room.isReady(), room.isReady() ? room.readyAt() : null, null),
-				new Condition(Type.NOON_REACHED, !now.isBefore(noon), now, noon),
-				new Condition(Type.AVAILABLE_BY_DEADLINE, availableAt != null && !availableAt.isAfter(deadline),
-						availableAt, deadline),
+				new Condition(Type.OFFER_WINDOW_OPEN, !now.isBefore(offerStart), now, offerStart),
+				new Condition(Type.FIRST_SLOT_BY_DEADLINE, firstAvailable != null && !firstAvailable.isAfter(deadline),
+						firstAvailable, deadline),
 				Condition.of(Type.NO_PREVIOUS_OFFER, r.offerStatus() == null));
+	}
+
+	/** 정오 전에는 "지금 바로" 입실을 판다 */
+	private boolean immediateOpen(LocalDateTime now) {
+		return now.isBefore(now.toLocalDate().atTime(policy.immediateCheckInUntil()));
+	}
+
+	/** 지금 팔 수 있는 가장 이른 입실 시각: 정오 전이면 지금, 아니면 첫 입실 정각 */
+	private LocalDateTime firstAvailable(LocalDateTime now) {
+		return immediateOpen(now) ? now : firstSlot(now);
+	}
+
+	/**
+	 * {@code offeredAt}에 제안할 때 팔 수 있는 첫 입실 정각. 정각은 정오부터 팔고, 다음 정각까지 최소 여유 이하로 남으면
+	 * 그다음 정각이다. 예: 09:30 → 12:00, 11:25 → 12:00, 11:50 → 13:00, 12:30 → 13:00.
+	 */
+	public LocalDateTime firstSlot(LocalDateTime offeredAt) {
+		LocalDateTime slot = offeredAt.truncatedTo(ChronoUnit.HOURS).plusHours(1);
+		if (Duration.between(offeredAt, slot).compareTo(policy.earlyCheckInMinLead()) <= 0) {
+			slot = slot.plusHours(1);
+		}
+		LocalDateTime earliest = offeredAt.toLocalDate().atTime(policy.immediateCheckInUntil());
+		return slot.isBefore(earliest) ? earliest : slot;
 	}
 
 	/** 비밀번호 발송 조건: 객실 준비 완료, 발송 시각(얼리 확정이면 결제한 입실 시각) 도달 */
@@ -208,50 +237,56 @@ public final class CheckInRuleEngine {
 	}
 
 	/**
-	 * 얼리체크인 입실 시각 선택지: "지금 바로"와 마지막 얼리 입실 시각까지 남은 정각. 예: 12:05 → 지금 바로, 13:00, 14:00.
-	 * 마지막 얼리 입실 시각이 지났으면 빈 목록.
+	 * 얼리체크인 입실 시각 선택지: 정오 전이면 "지금 바로", 그리고 제안 때의 첫 입실 정각부터 마지막 얼리 입실 정각까지 아직
+	 * 오지 않은 정각. 정각은 고른 정각 전까지 결제할 수 있다.
+	 *
+	 * @param offeredAt 제안을 보낸 시각
 	 */
-	public List<EarlyCheckInOption> offerOptions(LocalDateTime now) {
-		LocalDateTime deadline = now.toLocalDate().atTime(policy.lastEarlyCheckInAt());
-		if (now.isAfter(deadline)) {
-			return List.of();
-		}
+	public List<EarlyCheckInOption> offerOptions(LocalDateTime offeredAt, LocalDateTime now) {
+		LocalDateTime deadline = offeredAt.toLocalDate().atTime(policy.lastEarlyCheckInAt());
 		List<EarlyCheckInOption> options = new ArrayList<>();
-		options.add(new EarlyCheckInOption(now, true, earlyCheckInFee(now)));
-		for (LocalDateTime hour = now.truncatedTo(ChronoUnit.HOURS).plusHours(1); !hour.isAfter(deadline);
-				hour = hour.plusHours(1)) {
-			options.add(new EarlyCheckInOption(hour, false, earlyCheckInFee(hour)));
+		if (immediateOpen(now) && now.isBefore(deadline)) {
+			options.add(new EarlyCheckInOption(now, true, earlyCheckInFee(now)));
+		}
+		for (LocalDateTime slot = firstSlot(offeredAt); !slot.isAfter(deadline); slot = slot.plusHours(1)) {
+			if (slot.isAfter(now)) {
+				options.add(new EarlyCheckInOption(slot, false, earlyCheckInFee(slot)));
+			}
 		}
 		return options;
 	}
 
-	/** 올림((기본 체크인 − 입실 시각) / 1시간) × 시간당 요금. 예: 13:20 입실 → 1시간 40분 → 2시간 → 20,000원 */
+	/**
+	 * 올림(기본 체크인 − 입실 시각, 시간 단위), 최대 시간까지 × 시간당 요금. 기본값으로 14:00 → 10,000원, 13:00 → 20,000원,
+	 * 12:00 → 30,000원, 정오 전("지금 바로") → 40,000원.
+	 */
 	public int earlyCheckInFee(LocalDateTime checkInAt) {
 		LocalDateTime standardCheckIn = checkInAt.toLocalDate().atTime(policy.standardCheckInAt());
 		long minutes = Math.max(0, Duration.between(checkInAt, standardCheckIn).toMinutes());
-		long hours = (minutes + 59) / 60;
+		long hours = Math.min((minutes + 59) / 60, policy.earlyCheckInMaxHours());
 		return Math.toIntExact(hours * policy.earlyCheckInFeePerHour());
 	}
 
 	/**
-	 * 결제 시점에 다시 판단한다. 제안 만료(마지막 얼리 입실 시각 이후), 결제 대기 중인 제안 없음, 이미 지난 입실 시각,
-	 * 선택지에 없는 시각이면 결제를 받지 않는다.
+	 * 결제 시점에 다시 판단한다. 제안 만료(마지막 얼리 입실 정각 도달), 결제 대기 중인 제안 없음, 이미 온 정각(정오가 지난
+	 * "지금 바로" 포함), 선택지에 없는 시각이면 결제를 받지 않는다.
 	 *
 	 * @param checkInAt 고른 입실 시각. "지금 바로"면 현재 시각
 	 */
 	public Optional<PaymentRejection> paymentRejection(LocalDateTime now, ReservationSnapshot r,
 			LocalDateTime checkInAt) {
-		LocalDateTime deadline = now.toLocalDate().atTime(policy.lastEarlyCheckInAt());
-		if (now.isAfter(deadline)) {
+		if (!now.isBefore(now.toLocalDate().atTime(policy.lastEarlyCheckInAt()))) {
 			return Optional.of(PaymentRejection.OFFER_EXPIRED);
 		}
-		if (r.status() != ReservationStatus.OFFER_SENT) {
+		if (r.status() != ReservationStatus.OFFER_SENT || r.offerSentAt() == null) {
 			return Optional.of(PaymentRejection.OFFER_NOT_OPEN);
 		}
-		if (checkInAt.isBefore(now)) {
+		boolean immediate = checkInAt.equals(now) && immediateOpen(now);
+		if (!immediate && !checkInAt.isAfter(now)) {
 			return Optional.of(PaymentRejection.TIME_PASSED);
 		}
-		boolean listed = offerOptions(now).stream().anyMatch(option -> option.checkInAt().equals(checkInAt));
+		boolean listed = offerOptions(r.offerSentAt(), now).stream()
+			.anyMatch(option -> option.checkInAt().equals(checkInAt));
 		return listed ? Optional.empty() : Optional.of(PaymentRejection.INVALID_TIME);
 	}
 
@@ -299,11 +334,11 @@ public final class CheckInRuleEngine {
 				// 아래에서 발송 단계를 판단한다
 			}
 		}
-		if (r.noonNoticeSentAt() == null) {
-			return new NextStep(NextStep.Type.NOON_NOTICE, Actor.SYSTEM, day.atTime(policy.noonNoticeAt()));
-		}
 		if (r.status() == ReservationStatus.EARLY_CONFIRMED) {
 			return new NextStep(NextStep.Type.SEND_PASSWORD, Actor.SYSTEM, r.earlyCheckInAt());
+		}
+		if (r.noonNoticeSentAt() == null && r.paidAt() == null) {
+			return new NextStep(NextStep.Type.NOON_NOTICE, Actor.SYSTEM, day.atTime(policy.noonNoticeAt()));
 		}
 		return new NextStep(NextStep.Type.SEND_PASSWORD, Actor.SYSTEM,
 				latest(day.atTime(policy.passwordSendAt()), now));
@@ -334,8 +369,8 @@ public final class CheckInRuleEngine {
 	 */
 	public List<LocalDateTime> checkpoints(RuleContext ctx, LocalDateTime from, LocalDateTime to) {
 		TreeSet<LocalDateTime> times = new TreeSet<>();
-		List<LocalTime> policyTimes = List.of(policy.noonNoticeAt(), policy.cleaningWarningAt(),
-				policy.passwordSendAt(), policy.standardCheckInAt());
+		List<LocalTime> policyTimes = List.of(policy.offerStartAt(), policy.noonNoticeAt(), policy.cleaningWarningAt(),
+				policy.lastEarlyCheckInAt(), policy.passwordSendAt(), policy.standardCheckInAt());
 		for (LocalDate day = from.toLocalDate(); !day.isAfter(to.toLocalDate()); day = day.plusDays(1)) {
 			for (LocalTime time : policyTimes) {
 				times.add(day.atTime(time));

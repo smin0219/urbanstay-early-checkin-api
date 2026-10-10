@@ -23,7 +23,9 @@ public record ReservationSnapshot(
 		LocalDateTime checkedOutAt,
 		LocalDateTime noonNoticeSentAt,
 		OfferStatus offerStatus,
+		LocalDateTime offerSentAt,
 		LocalDateTime earlyCheckInAt,
+		LocalDateTime paidAt,
 		LocalDateTime passwordHeldAt,
 		LocalDateTime delayNoticeSentAt) {
 

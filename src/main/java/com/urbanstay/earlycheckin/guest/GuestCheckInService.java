@@ -8,6 +8,9 @@ import java.util.NoSuchElementException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.urbanstay.earlycheckin.domain.MessageLog;
+import com.urbanstay.earlycheckin.domain.MessageLogRepository;
+import com.urbanstay.earlycheckin.domain.MessageType;
 import com.urbanstay.earlycheckin.domain.OfferStatus;
 import com.urbanstay.earlycheckin.domain.Reservation;
 import com.urbanstay.earlycheckin.domain.ReservationRepository;
@@ -42,6 +45,8 @@ public class GuestCheckInService {
 
 	private final ReservationRepository reservationRepository;
 
+	private final MessageLogRepository messageLogRepository;
+
 	private final RuleEvaluationService evaluationService;
 
 	private final RoomEventService roomEventService;
@@ -52,10 +57,11 @@ public class GuestCheckInService {
 	}
 
 	/**
-	 * 얼리체크인 결제(목업). 요금은 결제 시점에 다시 계산하고, 화면에 보였던 요금과 다르면 받지 않는다. 같은 멱등 키로 다시
-	 * 요청하면(버튼 중복 클릭) 이미 끝난 결제를 그대로 돌려준다.
+	 * 얼리체크인 결제(목업). 입실 정각과 요금은 결제 시점에 다시 확인하고, 화면에 보였던 요금과 다르면 받지 않는다. 같은 멱등
+	 * 키로 다시 요청하면(버튼 중복 클릭) 이미 끝난 결제를 그대로 돌려준다. 확정되면 호수와 입실 방법을 문자로 알려 주고, 이
+	 * 예약에는 정오 안내를 따로 보내지 않는다.
 	 *
-	 * @param checkInAt 고른 입실 시각. null이면 "지금 바로"
+	 * @param checkInAt 고른 입실 정각. null이면 "지금 바로" (결제하는 시각에 입실, 정오 전까지)
 	 */
 	@Transactional
 	public GuestCheckInResponse pay(String token, LocalDateTime checkInAt, int expectedFee, String idempotencyKey) {
@@ -73,9 +79,14 @@ public class GuestCheckInService {
 		});
 		int fee = engine.earlyCheckInFee(chosen);
 		if (fee != expectedFee) {
-			throw new IllegalStateException("시간이 지나 요금이 %,d원으로 바뀌었습니다. 다시 확인해 주세요.".formatted(fee));
+			throw new IllegalStateException("%s 입실 요금은 %,d원입니다. 다시 확인해 주세요.".formatted(chosen.format(HH_MM), fee));
 		}
 		r.confirmEarlyCheckIn(chosen, fee, idempotencyKey, now);
+		String room = r.getRoom().getNumber();
+		messageLogRepository.save(new MessageLog(r, MessageType.EARLY_CONFIRMATION, now, ("[어반스테이] %s님, 얼리체크인이 "
+				+ "확정되었습니다(%s 입실, %,d원 결제). 객실은 %s호이며, 1층 공동현관 → 엘리베이터 → %s호 도어락으로 들어오시면 됩니다. "
+				+ "비밀번호는 %s에 보내드립니다. 체크인 안내: %s").formatted(r.getGuestName(), chosen.format(HH_MM), fee, room, room,
+						chosen.format(HH_MM), r.checkInPath())));
 		evaluationService.evaluate();
 		return toResponse(r, now);
 	}
@@ -107,7 +118,7 @@ public class GuestCheckInService {
 
 	private GuestCheckInResponse toResponse(Reservation r, LocalDateTime now) {
 		Stage stage = stage(r);
-		boolean noticed = r.getNoonNoticeSentAt() != null && r.getRoom() != null;
+		boolean roomGuided = roomGuided(r) && r.getRoom() != null;
 		LocalDateTime passwordAt = switch (stage) {
 			case EARLY_CONFIRMED -> r.getEarlyCheckInAt();
 			case BEFORE_NOTICE, OFFER_OPEN, WAITING_PASSWORD -> r.getCheckInDate().atTime(policy.passwordSendAt());
@@ -116,9 +127,10 @@ public class GuestCheckInService {
 		boolean passwordSent = stage == Stage.PASSWORD_READY || stage == Stage.CHECKED_IN;
 		return new GuestCheckInResponse(now, r.getGuestName(), r.getCheckInDate(), r.getCheckOutDate(),
 				r.getCheckInDate().atTime(policy.standardCheckInAt()), stage,
-				noticed ? new GuestRoom(r.getRoom().getNumber(), r.getRoom().getFloor()) : null,
+				roomGuided ? new GuestRoom(r.getRoom().getNumber(), r.getRoom().getFloor()) : null,
 				stage == Stage.OFFER_OPEN
-						? new Offer(engine.offerOptions(now), r.getCheckInDate().atTime(policy.lastEarlyCheckInAt()))
+						? new Offer(engine.offerOptions(r.getOfferSentAt(), now),
+								r.getCheckInDate().atTime(policy.lastEarlyCheckInAt()))
 						: null,
 				r.getOfferStatus() == OfferStatus.ACCEPTED
 						? new EarlyCheckIn(r.getEarlyCheckInAt(), r.getEarlyCheckInFee(), r.getPaidAt()) : null,
@@ -127,26 +139,29 @@ public class GuestCheckInService {
 				r.getDelayNoticeSentAt() != null, r.getCheckedInAt());
 	}
 
+	/** 얼리체크인 제안은 정오 전에도 올 수 있으므로 상태로 단계를 정한다. */
 	private static Stage stage(Reservation r) {
-		if (r.getNoonNoticeSentAt() == null) {
-			return Stage.BEFORE_NOTICE;
-		}
 		return switch (r.getStatus()) {
 			case OFFER_SENT -> Stage.OFFER_OPEN;
 			case EARLY_CONFIRMED -> Stage.EARLY_CONFIRMED;
 			case PASSWORD_HELD -> Stage.PASSWORD_HELD;
 			case PASSWORD_SENT -> Stage.PASSWORD_READY;
 			case CHECKED_IN, CHECKED_OUT -> Stage.CHECKED_IN;
-			default -> Stage.WAITING_PASSWORD;
+			default -> roomGuided(r) ? Stage.WAITING_PASSWORD : Stage.BEFORE_NOTICE;
 		};
+	}
+
+	/** 호수와 입실 방법을 안내받았는지: 정오 안내, 또는 얼리체크인 결제 확정 문자 */
+	private static boolean roomGuided(Reservation r) {
+		return r.getNoonNoticeSentAt() != null || r.getPaidAt() != null;
 	}
 
 	private String message(PaymentRejection reason) {
 		return switch (reason) {
-			case OFFER_EXPIRED -> "얼리체크인은 %s까지 신청할 수 있습니다. 비밀번호는 %s에 보내드립니다."
+			case OFFER_EXPIRED -> "얼리체크인은 %s 전까지 신청할 수 있습니다. 비밀번호는 %s에 보내드립니다."
 				.formatted(policy.lastEarlyCheckInAt().format(HH_MM), policy.passwordSendAt().format(HH_MM));
 			case OFFER_NOT_OPEN -> "결제할 수 있는 얼리체크인 제안이 없습니다.";
-			case TIME_PASSED -> "선택한 입실 시각이 지났습니다. 다시 선택해 주세요.";
+			case TIME_PASSED -> "선택한 입실 시각이 지나 결제할 수 없습니다. 다른 시각을 선택해 주세요.";
 			case INVALID_TIME -> "선택할 수 없는 입실 시각입니다.";
 		};
 	}

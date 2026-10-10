@@ -5,11 +5,11 @@ public sealed interface RuleAction {
 
 	long reservationId();
 
-	/** 정오 안내 (호수·입실 방법). {@code withOffer}면 얼리체크인 제안을 함께 담는다. 비밀번호는 넣지 않는다. */
-	record SendNoonNotice(long reservationId, boolean withOffer) implements RuleAction {
+	/** 정오 안내 (호수·입실 방법). 비밀번호는 넣지 않는다. */
+	record SendNoonNotice(long reservationId) implements RuleAction {
 	}
 
-	/** 정오 이후 객실이 준비되어 따로 보내는 얼리체크인 제안 */
+	/** 객실이 준비되면 보내는 얼리체크인 제안. 호수·입실 방법은 결제 확정 때 알려 준다. */
 	record SendEarlyOffer(long reservationId) implements RuleAction {
 	}
 

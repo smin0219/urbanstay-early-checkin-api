@@ -114,6 +114,11 @@ public class Reservation {
 		this.accessToken = accessToken;
 	}
 
+	/** 고객 화면 경로. 고객에게 보내는 문자에 링크로 넣는다. */
+	public String checkInPath() {
+		return "/check-in/" + accessToken;
+	}
+
 	/** 고객 링크는 체크아웃 시각까지만 쓸 수 있다. */
 	public boolean isAccessibleAt(LocalDateTime now) {
 		return now.isBefore(checkOutDate.atTime(checkOutTime));

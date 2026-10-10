@@ -21,12 +21,13 @@ public class ClockController {
 
 	@GetMapping
 	public ClockResponse now() {
-		return new ClockResponse(clockService.now());
+		return clockService.current();
 	}
 
 	@PostMapping("/advance")
 	public ClockResponse advance(@Valid @RequestBody AdvanceRequest request) {
-		return new ClockResponse(clockService.advanceTo(request.to()));
+		clockService.advanceTo(request.to());
+		return clockService.current();
 	}
 
 	public record AdvanceRequest(@NotNull LocalDateTime to) {

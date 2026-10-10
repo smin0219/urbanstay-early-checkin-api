@@ -17,6 +17,8 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 
+import com.urbanstay.earlycheckin.clock.ClockResponse;
+import com.urbanstay.earlycheckin.clock.ClockResponse.Milestone;
 import com.urbanstay.earlycheckin.dashboard.DashboardResponse;
 import com.urbanstay.earlycheckin.dashboard.DashboardResponse.ArrivalRow;
 import com.urbanstay.earlycheckin.domain.MessageLog;
@@ -48,7 +50,7 @@ class ClockScenarioTest {
 	}
 
 	@Test
-	void 시작_시각에는_배정_대기와_준비_현황만_보인다() {
+	void 시작_시각에는_배정_대기와_이미_준비된_방의_얼리체크인_제안이_보인다() {
 		DashboardResponse dashboard = dashboard();
 
 		assertThat(dashboard.now()).isEqualTo(START);
@@ -61,15 +63,19 @@ class ClockScenarioTest {
 			.containsExactly(
 					tuple("김민수", NextStep.Type.ASSIGN_ROOM),
 					tuple("박준호", NextStep.Type.WAIT_CHECKOUT),
-					tuple("이서연", NextStep.Type.NOON_NOTICE),
-					tuple("최지훈", NextStep.Type.NOON_NOTICE));
+					tuple("이서연", NextStep.Type.GUEST_PAYMENT),
+					tuple("최지훈", NextStep.Type.GUEST_PAYMENT));
+		assertThat(dashboard.summary().earlyOffered()).isEqualTo(2);
 	}
 
 	@Test
-	void 시계를_옮기면_정오_안내_비밀번호_발송_보류가_원래_시각으로_기록된다() {
+	void 시계를_옮기면_제안_정오_안내_비밀번호_발송_보류가_원래_시각으로_기록된다() {
 		advanceTo("15:20");
 
+		// 501·901호는 시작 시각에 이미 준비되어 09:30에 제안을 받고, 결제하지 않았으므로 정오 안내도 받는다
 		assertThat(sentMessages()).containsExactly(
+				tuple(MessageType.EARLY_OFFER, "501", START),
+				tuple(MessageType.EARLY_OFFER, "901", START),
 				tuple(MessageType.NOON_NOTICE, "501", time("12:00")),
 				tuple(MessageType.NOON_NOTICE, "803", time("12:00")),
 				tuple(MessageType.NOON_NOTICE, "901", time("12:00")),
@@ -104,6 +110,22 @@ class ClockScenarioTest {
 		}
 
 		assertThat(sentMessages()).isEqualTo(jumped);
+	}
+
+	@Test
+	void 시계는_타임라인에_표시할_오늘의_규칙_시각을_함께_알려준다() {
+		ClockResponse clock = mvc.get().uri("/api/clock").exchange().assertThat().hasStatusOk()
+			.bodyJson().convertTo(ClockResponse.class).actual();
+
+		assertThat(clock.now()).isEqualTo(START);
+		assertThat(clock.milestones()).extracting(Milestone::at, Milestone::type)
+			.containsExactly(
+					tuple(time("09:30"), Milestone.Type.OFFER_START),
+					tuple(time("12:00"), Milestone.Type.NOON_NOTICE),
+					tuple(time("13:30"), Milestone.Type.CLEANING_WARNING),
+					tuple(time("14:00"), Milestone.Type.OFFER_EXPIRY),
+					tuple(time("14:30"), Milestone.Type.PASSWORD_SEND),
+					tuple(time("15:00"), Milestone.Type.STANDARD_CHECK_IN));
 	}
 
 	@Test

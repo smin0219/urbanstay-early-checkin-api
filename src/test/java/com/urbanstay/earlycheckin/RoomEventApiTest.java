@@ -78,7 +78,7 @@ class RoomEventApiTest {
 		assertThat(offer.outcome()).isEqualTo(RuleCheck.Outcome.NOT_MET);
 		assertThat(offer.conditions()).filteredOn(c -> !c.satisfied())
 			.extracting(RuleCheck.Condition::type)
-			.containsExactly(RuleCheck.Condition.Type.ROOM_READY, RuleCheck.Condition.Type.AVAILABLE_BY_DEADLINE);
+			.containsExactly(RuleCheck.Condition.Type.ROOM_READY, RuleCheck.Condition.Type.FIRST_SLOT_BY_DEADLINE);
 	}
 
 	@Test

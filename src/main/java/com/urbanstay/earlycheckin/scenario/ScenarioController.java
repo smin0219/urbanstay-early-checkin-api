@@ -22,7 +22,7 @@ public class ScenarioController {
 	@PostMapping("/reset")
 	public ClockResponse reset() {
 		sampleDataLoader.load();
-		return new ClockResponse(clockService.now());
+		return clockService.current();
 	}
 
 }

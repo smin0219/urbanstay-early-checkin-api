@@ -36,7 +36,7 @@ class CheckInRuleEngineTest {
 
 	private static final CheckInPolicy POLICY = new CheckInPolicy(LocalTime.of(12, 0), LocalTime.of(14, 0),
 			LocalTime.of(13, 30), LocalTime.of(14, 30), LocalTime.of(15, 0), LocalTime.of(11, 0),
-			Duration.ofMinutes(30), 8, 10_000);
+			Duration.ofMinutes(30), 8, 10_000, 4, LocalTime.of(9, 30), LocalTime.of(12, 0), Duration.ofMinutes(15));
 
 	private final CheckInRuleEngine engine = new CheckInRuleEngine(POLICY);
 
@@ -59,20 +59,27 @@ class CheckInRuleEngineTest {
 	class 정오_안내 {
 
 		@Test
-		void 정오_전에는_아무것도_보내지_않는다() {
-			assertThat(evaluate("11:59", readyRoom("1203", "10:00"), arrival(1).in("1203"))).isEmpty();
-		}
-
-		@Test
-		void 정오에_준비된_방이면_안내에_제안을_담는다() {
-			assertThat(evaluate("12:00", readyRoom("1203", "11:10"), arrival(1).in("1203")))
-				.containsExactly(new SendNoonNotice(1, true));
-		}
-
-		@Test
-		void 정오에_미준비_방이면_안내만_보낸다() {
+		void 정오에_호수와_입실_방법을_안내한다() {
 			assertThat(evaluate("12:00", room("803", RoomStatus.CLEANING), arrival(2).in("803")))
-				.containsExactly(new SendNoonNotice(2, false));
+				.containsExactly(new SendNoonNotice(2));
+		}
+
+		@Test
+		void 정오_전에는_안내하지_않는다() {
+			assertThat(evaluate("11:59", room("803", RoomStatus.CLEANING), arrival(2).in("803"))).isEmpty();
+		}
+
+		@Test
+		void 제안을_받았어도_결제하지_않았으면_정오에_안내한다() {
+			assertThat(evaluate("12:00", readyRoom("1203", "11:10"), arrival(1).in("1203").offered("11:10")))
+				.containsExactly(new SendNoonNotice(1));
+		}
+
+		@Test
+		void 얼리체크인을_결제한_예약은_결제_때_호수를_받았으므로_정오_안내를_보내지_않는다() {
+			assertThat(evaluate("12:00", readyRoom("1203", "11:10"),
+					arrival(1).in("1203").offered("11:10").paid("11:20", "13:00")))
+				.isEmpty();
 		}
 
 		@Test
@@ -94,9 +101,29 @@ class CheckInRuleEngineTest {
 	@Nested
 	class 얼리체크인_제안 {
 
+		@Test
+		void 객실이_준비되면_정오를_기다리지_않고_바로_제안한다() {
+			assertThat(evaluate("11:25", readyRoom("1203", "11:25"), arrival(1).in("1203")))
+				.containsExactly(new SendEarlyOffer(1));
+		}
+
+		@Test
+		void 이미_준비된_방은_09시30분부터_제안한다() {
+			assertThat(evaluate("09:29", readyRoom("501", "09:00"), arrival(3).in("501"))).isEmpty();
+			assertThat(evaluate("09:30", readyRoom("501", "09:00"), arrival(3).in("501")))
+				.containsExactly(new SendEarlyOffer(3));
+		}
+
 		@ParameterizedTest
-		@CsvSource({ "13:59, true", "14:00, true", "14:01, false" })
-		void 정오_이후_준비되면_14시까지만_즉시_제안한다(String readyAt, boolean offered) {
+		@CsvSource({ "09:30, 12:00", "11:25, 12:00", "11:44, 12:00", "11:45, 13:00", "11:50, 13:00", "12:30, 13:00",
+				"13:00, 14:00" })
+		void 정각은_정오부터_팔고_다음_정각까지_15분_이하로_남으면_그다음_정각부터(String offeredAt, String firstSlot) {
+			assertThat(engine.firstSlot(at(offeredAt))).isEqualTo(at(firstSlot));
+		}
+
+		@ParameterizedTest
+		@CsvSource({ "13:44, true", "13:45, false" })
+		void 팔_수_있는_첫_정각이_14시를_넘으면_제안하지_않는다(String readyAt, boolean offered) {
 			List<RuleAction> actions = evaluate(readyAt, readyRoom("1203", readyAt), arrival(1).in("1203").noticed());
 
 			if (offered) {
@@ -115,12 +142,11 @@ class CheckInRuleEngineTest {
 		}
 
 		@Test
-		void 제안은_14시_정각까지_유효하고_지나면_만료된다() {
-			ArrivalBuilder offered = arrival(1).in("1203").noticed().status(ReservationStatus.OFFER_SENT)
-				.offer(OfferStatus.SENT);
+		void 제안은_14시_정각이_되면_만료된다() {
+			ArrivalBuilder offered = arrival(1).in("1203").noticed().offered("11:10");
 
-			assertThat(evaluate("14:00", readyRoom("1203", "11:10"), offered)).isEmpty();
-			assertThat(evaluate("14:01", readyRoom("1203", "11:10"), offered)).containsExactly(new ExpireOffer(1));
+			assertThat(evaluate("13:59", readyRoom("1203", "11:10"), offered)).isEmpty();
+			assertThat(evaluate("14:00", readyRoom("1203", "11:10"), offered)).containsExactly(new ExpireOffer(1));
 		}
 
 	}
@@ -157,6 +183,13 @@ class CheckInRuleEngineTest {
 			assertThat(evaluate("15:00", room("803", RoomStatus.CLEANING), held))
 				.containsExactly(new SendDelayNotice(2));
 			assertThat(evaluate("15:10", room("803", RoomStatus.CLEANING), held.delayNoticed("15:00"))).isEmpty();
+		}
+
+		@Test
+		void 지금_바로_결제한_얼리_확정_건은_정오_전이라도_바로_보낸다() {
+			assertThat(evaluate("10:00", readyRoom("501", "09:00"),
+					arrival(3).in("501").offered("09:30").paid("10:00", "10:00")))
+				.containsExactly(new SendPassword(3));
 		}
 
 		@Test
@@ -259,6 +292,13 @@ class CheckInRuleEngineTest {
 		}
 
 		@Test
+		void 얼리_확정이면_정오_안내_없이_입실_정각에_비밀번호_발송() {
+			assertThat(nextStep("10:10", List.of(readyRoom("501", "09:00")),
+					arrival(3).in("501").offered("09:30").paid("10:05", "12:00")))
+				.isEqualTo(new NextStep(NextStep.Type.SEND_PASSWORD, Actor.SYSTEM, at("12:00")));
+		}
+
+		@Test
 		void 준비된_방은_정오_안내_뒤_비밀번호_발송() {
 			assertThat(nextStep("09:30", List.of(readyRoom("501", "09:00")), arrival(3).in("501")))
 				.isEqualTo(new NextStep(NextStep.Type.NOON_NOTICE, Actor.SYSTEM, at("12:00")));
@@ -273,29 +313,38 @@ class CheckInRuleEngineTest {
 	class 얼리체크인_요금과_선택지 {
 
 		@ParameterizedTest
-		@CsvSource({ "14:00, 10000", "13:00, 20000", "13:20, 20000", "12:05, 30000", "12:00, 30000", "14:59, 10000" })
-		void 기본_체크인까지_남은_시간을_올림해_시간당_요금을_곱한다(String checkInAt, int fee) {
+		@CsvSource({ "14:00, 10000", "13:00, 20000", "12:00, 30000", "11:59, 40000", "09:30, 40000" })
+		void 기본_체크인까지_남은_시간을_올림해_시간당_요금을_곱하되_4시간까지만_받는다(String checkInAt, int fee) {
 			assertThat(engine.earlyCheckInFee(at(checkInAt))).isEqualTo(fee);
 		}
 
 		@Test
-		void 지금_바로와_14시까지_남은_정각을_보여준다() {
-			assertThat(engine.offerOptions(at("12:05"))).containsExactly(
-					new EarlyCheckInOption(at("12:05"), true, 30_000),
+		void 정오_전에는_지금_바로와_12시부터_14시까지_정각을_판다() {
+			assertThat(engine.offerOptions(at("09:30"), at("09:30"))).containsExactly(
+					new EarlyCheckInOption(at("09:30"), true, 40_000),
+					new EarlyCheckInOption(at("12:00"), false, 30_000),
 					new EarlyCheckInOption(at("13:00"), false, 20_000),
 					new EarlyCheckInOption(at("14:00"), false, 10_000));
 		}
 
 		@Test
-		void 정각에_열면_그_정각은_지금_바로로만_보여준다() {
-			assertThat(engine.offerOptions(at("13:00"))).extracting(EarlyCheckInOption::checkInAt)
-				.containsExactly(at("13:00"), at("14:00"));
+		void 지금_바로는_보는_시각의_입실이다() {
+			assertThat(engine.offerOptions(at("09:30"), at("11:20")).getFirst())
+				.isEqualTo(new EarlyCheckInOption(at("11:20"), true, 40_000));
 		}
 
 		@Test
-		void 마지막_얼리_입실_시각_정각까지만_선택지가_있다() {
-			assertThat(engine.offerOptions(at("14:00"))).hasSize(1);
-			assertThat(engine.offerOptions(at("14:01"))).isEmpty();
+		void 정오가_되면_지금_바로가_빠지고_정각이_되면_그_정각도_빠진다() {
+			assertThat(engine.offerOptions(at("11:10"), at("12:00"))).extracting(EarlyCheckInOption::checkInAt)
+				.containsExactly(at("13:00"), at("14:00"));
+			assertThat(engine.offerOptions(at("11:10"), at("14:00"))).isEmpty();
+		}
+
+		@Test
+		void 정오_직전에_준비되면_지금_바로와_15분_규칙을_지난_정각을_판다() {
+			assertThat(engine.offerOptions(at("11:50"), at("11:50")))
+				.extracting(EarlyCheckInOption::checkInAt, EarlyCheckInOption::immediate)
+				.containsExactly(tuple(at("11:50"), true), tuple(at("13:00"), false), tuple(at("14:00"), false));
 		}
 
 	}
@@ -303,32 +352,50 @@ class CheckInRuleEngineTest {
 	@Nested
 	class 결제_검증 {
 
-		private final ReservationSnapshot offered = arrival(1).in("1203").noticed()
-			.status(ReservationStatus.OFFER_SENT).offer(OfferStatus.SENT).build();
+		private final ReservationSnapshot offered = arrival(1).in("1203").offered("11:10").build();
 
 		@Test
-		void 지금_바로와_남은_정각은_결제할_수_있다() {
-			assertThat(engine.paymentRejection(at("12:05"), offered, at("12:05"))).isEmpty();
-			assertThat(engine.paymentRejection(at("12:05"), offered, at("13:00"))).isEmpty();
+		void 정오_전에는_지금_바로_결제할_수_있다() {
+			assertThat(engine.paymentRejection(at("11:20"), offered, at("11:20"))).isEmpty();
 		}
 
 		@Test
-		void 결제_화면을_연_채_고른_시각이_지나면_받지_않는다() {
+		void 정오가_되면_지금_바로는_결제할_수_없다() {
+			assertThat(engine.paymentRejection(at("12:00"), offered, at("12:00")))
+				.contains(PaymentRejection.TIME_PASSED);
+		}
+
+		@Test
+		void 고른_정각_전까지_결제할_수_있다() {
+			assertThat(engine.paymentRejection(at("11:20"), offered, at("12:00"))).isEmpty();
+			assertThat(engine.paymentRejection(at("12:59"), offered, at("13:00"))).isEmpty();
+		}
+
+		@Test
+		void 고른_정각이_되면_결제할_수_없다() {
+			assertThat(engine.paymentRejection(at("13:00"), offered, at("13:00")))
+				.contains(PaymentRejection.TIME_PASSED);
 			assertThat(engine.paymentRejection(at("13:05"), offered, at("13:00")))
 				.contains(PaymentRejection.TIME_PASSED);
 		}
 
 		@Test
 		void 선택지에_없는_시각은_받지_않는다() {
-			assertThat(engine.paymentRejection(at("12:05"), offered, at("13:30")))
+			assertThat(engine.paymentRejection(at("11:20"), offered, at("13:30")))
 				.contains(PaymentRejection.INVALID_TIME);
-			assertThat(engine.paymentRejection(at("12:05"), offered, at("15:00")))
+			assertThat(engine.paymentRejection(at("11:20"), offered, at("15:00")))
+				.contains(PaymentRejection.INVALID_TIME);
+			// 정오 전 정각(11:00)은 팔지 않는다 ("지금 바로"로 묶음)
+			assertThat(engine.paymentRejection(at("10:00"), arrival(3).in("501").offered("09:30").build(), at("11:00")))
+				.contains(PaymentRejection.INVALID_TIME);
+			// 11:50 제안은 12:00까지 10분뿐이라 13:00부터 판다
+			assertThat(engine.paymentRejection(at("11:55"), arrival(1).in("1203").offered("11:50").build(), at("12:00")))
 				.contains(PaymentRejection.INVALID_TIME);
 		}
 
 		@Test
-		void 마지막_얼리_입실_시각이_지나면_제안이_만료된다() {
-			assertThat(engine.paymentRejection(at("14:01"), offered, at("14:01")))
+		void 마지막_얼리_입실_정각이_되면_제안이_만료된다() {
+			assertThat(engine.paymentRejection(at("14:00"), offered, at("14:00")))
 				.contains(PaymentRejection.OFFER_EXPIRED);
 		}
 
@@ -346,7 +413,7 @@ class CheckInRuleEngineTest {
 
 		@Test
 		void 제안하지_않은_이유를_조건별로_보여준다() {
-			// 14:10 준비 완료: 다른 조건은 맞지만 입실 가능 시각이 14:00을 넘었다
+			// 14:10 준비 완료: 다른 조건은 맞지만 팔 수 있는 첫 정각(15:00)이 14:00을 넘었다
 			RuleContext ctx = context("14:10", List.of(readyRoom("1203", "14:10")), arrival(1).in("1203").noticed());
 
 			RuleCheck offer = engine.explain(ctx, "1203").getFirst();
@@ -354,7 +421,7 @@ class CheckInRuleEngineTest {
 			assertThat(offer.outcome()).isEqualTo(RuleCheck.Outcome.NOT_MET);
 			assertThat(offer.conditions()).filteredOn(c -> !c.satisfied())
 				.extracting(RuleCheck.Condition::type)
-				.containsExactly(RuleCheck.Condition.Type.AVAILABLE_BY_DEADLINE);
+				.containsExactly(RuleCheck.Condition.Type.FIRST_SLOT_BY_DEADLINE);
 		}
 
 		@Test
@@ -389,7 +456,7 @@ class CheckInRuleEngineTest {
 			.status(ReservationStatus.EARLY_CONFIRMED).offer(OfferStatus.ACCEPTED).earlyAt("13:00"));
 
 		assertThat(engine.checkpoints(ctx, at("09:30"), at("15:00")))
-			.containsExactly(at("12:00"), at("13:00"), at("13:30"), at("14:30"));
+			.containsExactly(at("12:00"), at("13:00"), at("13:30"), at("14:00"), at("14:30"));
 	}
 
 	private List<RuleAction> evaluate(String now, RoomSnapshot room, ArrivalBuilder arrival) {
@@ -460,7 +527,11 @@ class CheckInRuleEngineTest {
 
 		private OfferStatus offerStatus;
 
+		private LocalDateTime offerSentAt;
+
 		private LocalDateTime earlyCheckInAt;
+
+		private LocalDateTime paidAt;
 
 		private LocalDateTime passwordHeldAt;
 
@@ -503,6 +574,23 @@ class CheckInRuleEngineTest {
 			return this;
 		}
 
+		/** 얼리체크인 제안을 받고 결제를 기다리는 중 */
+		ArrivalBuilder offered(String time) {
+			this.status = ReservationStatus.OFFER_SENT;
+			this.offerStatus = OfferStatus.SENT;
+			this.offerSentAt = at(time);
+			return this;
+		}
+
+		/** {@code time}에 {@code checkInAt} 입실을 결제 */
+		ArrivalBuilder paid(String time, String checkInAt) {
+			this.status = ReservationStatus.EARLY_CONFIRMED;
+			this.offerStatus = OfferStatus.ACCEPTED;
+			this.paidAt = at(time);
+			this.earlyCheckInAt = at(checkInAt);
+			return this;
+		}
+
 		ArrivalBuilder earlyAt(String time) {
 			this.earlyCheckInAt = at(time);
 			return this;
@@ -520,8 +608,8 @@ class CheckInRuleEngineTest {
 
 		ReservationSnapshot build() {
 			return new ReservationSnapshot(id, RoomType.STUDIO, List.of(), roomNumber, status, checkInDate,
-					checkOutDate, checkOutTime, checkedOutAt, noonNoticeSentAt, offerStatus, earlyCheckInAt,
-					passwordHeldAt, delayNoticeSentAt);
+					checkOutDate, checkOutTime, checkedOutAt, noonNoticeSentAt, offerStatus, offerSentAt, earlyCheckInAt,
+					paidAt, passwordHeldAt, delayNoticeSentAt);
 		}
 
 	}

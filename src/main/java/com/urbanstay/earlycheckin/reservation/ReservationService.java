@@ -164,7 +164,7 @@ public class ReservationService {
 	private static String lockMessage(RoomAssignmentRule.Lock lock) {
 		return switch (lock) {
 			case CHECKED_IN -> "이미 입실한 예약은 배정을 바꿀 수 없습니다.";
-			case NOTICE_SENT -> "정오 안내가 발송된 예약은 배정을 바꾸거나 취소할 수 없습니다.";
+			case NOTICE_SENT -> "정오 안내나 얼리체크인 제안이 나간 예약은 배정을 바꾸거나 취소할 수 없습니다.";
 		};
 	}
 

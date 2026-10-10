@@ -43,7 +43,7 @@ public class GuestCheckInController {
 	}
 
 	/**
-	 * @param checkInAt 고른 입실 시각. 없으면 "지금 바로"
+	 * @param checkInAt 고른 입실 정각. 없으면 "지금 바로" (정오 전까지)
 	 * @param expectedFee 화면에 보였던 요금. 결제 시점 요금과 다르면 결제하지 않는다
 	 * @param idempotencyKey 같은 결제 시도를 구분하는 키 (중복 클릭 방지)
 	 */

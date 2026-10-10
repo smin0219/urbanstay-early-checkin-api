@@ -38,7 +38,7 @@ public final class RoomAssignmentRule {
 	public enum Lock {
 		/** 이미 입실(또는 퇴실)한 예약 */
 		CHECKED_IN,
-		/** 정오 안내나 얼리체크인 제안이 이미 나간 예약 */
+		/** 정오 안내나 얼리체크인 제안이 이미 나간 예약 (제안은 특정 객실이 준비되어 나간 것이라 객실을 바꿀 수 없다) */
 		NOTICE_SENT
 	}
 

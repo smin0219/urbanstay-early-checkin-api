@@ -29,7 +29,7 @@ class RoomAssignmentRuleTest {
 
 	private static final CheckInPolicy POLICY = new CheckInPolicy(LocalTime.of(12, 0), LocalTime.of(14, 0),
 			LocalTime.of(13, 30), LocalTime.of(14, 30), LocalTime.of(15, 0), LocalTime.of(11, 0),
-			Duration.ofMinutes(30), 8, 10_000);
+			Duration.ofMinutes(30), 8, 10_000, 4, LocalTime.of(9, 30), LocalTime.of(12, 0), Duration.ofMinutes(15));
 
 	private final RoomAssignmentRule rule = new RoomAssignmentRule(POLICY);
 
@@ -141,7 +141,7 @@ class RoomAssignmentRuleTest {
 		void 정오_안내나_제안이_나가면_바꿀_수_없다() {
 			ReservationSnapshot offered = new ReservationSnapshot(1, RoomType.STUDIO, List.of(), "1203",
 					ReservationStatus.OFFER_SENT, DAY, DAY.plusDays(1), LocalTime.of(11, 0), null,
-					DAY.atTime(12, 0), OfferStatus.SENT, null, null, null);
+					null, OfferStatus.SENT, DAY.atTime(11, 10), null, null, null, null);
 
 			assertThat(rule.lock(offered)).contains(RoomAssignmentRule.Lock.NOTICE_SENT);
 		}
@@ -165,7 +165,7 @@ class RoomAssignmentRuleTest {
 	private static ReservationSnapshot reservation(long id, RoomType type, String room, LocalDate checkIn,
 			LocalDate checkOut, ReservationStatus status, RoomRequest... requests) {
 		return new ReservationSnapshot(id, type, List.of(requests), room, status, checkIn, checkOut,
-				LocalTime.of(11, 0), null, null, null, null, null, null);
+				LocalTime.of(11, 0), null, null, null, null, null, null, null, null);
 	}
 
 }

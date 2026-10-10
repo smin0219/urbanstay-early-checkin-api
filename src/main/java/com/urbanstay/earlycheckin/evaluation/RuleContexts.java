@@ -39,7 +39,9 @@ public final class RuleContexts {
 				r.getCheckedOutAt(),
 				r.getNoonNoticeSentAt(),
 				r.getOfferStatus(),
+				r.getOfferSentAt(),
 				r.getEarlyCheckInAt(),
+				r.getPaidAt(),
 				r.getPasswordHeldAt(),
 				r.getDelayNoticeSentAt());
 	}

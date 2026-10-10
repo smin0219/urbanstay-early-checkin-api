@@ -25,6 +25,7 @@ import com.urbanstay.earlycheckin.domain.RoomEvent;
 import com.urbanstay.earlycheckin.domain.RoomRepository;
 import com.urbanstay.earlycheckin.domain.RoomStatusChange;
 import com.urbanstay.earlycheckin.domain.RoomStatusChangeRepository;
+import com.urbanstay.earlycheckin.evaluation.RuleEvaluationService;
 import com.urbanstay.earlycheckin.rule.CheckInPolicy;
 
 import jakarta.persistence.EntityManager;
@@ -33,7 +34,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * sample-data.json을 적재한다. 애플리케이션 시작 시와 시나리오 초기화 API가 모두 이 로더를 쓴다. 기존 데이터를 지우고
- * 가상 시계도 시작 시각으로 되돌린다.
+ * 가상 시계도 시작 시각으로 되돌린 뒤, 시작 시각 기준으로 규칙을 평가한다.
  */
 @Component
 @RequiredArgsConstructor
@@ -54,6 +55,8 @@ public class SampleDataLoader implements ApplicationRunner {
 	private final ClockService clockService;
 
 	private final CheckInPolicy policy;
+
+	private final RuleEvaluationService evaluationService;
 
 	private final EntityManager entityManager;
 
@@ -88,6 +91,8 @@ public class SampleDataLoader implements ApplicationRunner {
 			.stream()
 			.map(room -> new RoomStatusChange(room.getNumber(), null, room.getStatus(), RoomEvent.INITIAL, start, null))
 			.toList());
+		// 시작 시각에 이미 준비된 방은 바로 얼리체크인 제안을 받는다
+		evaluationService.evaluate();
 	}
 
 	private Reservation toReservation(SampleData.ReservationData r, Map<String, Room> rooms) {

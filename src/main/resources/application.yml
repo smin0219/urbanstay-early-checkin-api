@@ -22,7 +22,7 @@ urbanstay:
   clock:
     start: "2026-10-10T09:30:00"
     zone: Asia/Seoul
-  # 운영 정책. 가정값이 확인되면 여기만 바꾼다 (docs/planning.md "열린 질문과 가정값")
+  # 운영 정책. 가정값이 확인되면 여기만 바꾼다 (기획서 "열린 질문과 가정값")
   policy:
     noon-notice-at: "12:00"
     last-early-check-in-at: "14:00"
@@ -33,3 +33,11 @@ urbanstay:
     early-checkout-threshold: 30m
     high-floor-from: 8
     early-check-in-fee-per-hour: 10000
+    # 정오 전 입실은 4시간(40,000원)으로 받는다
+    early-check-in-max-hours: 4
+    # 이미 준비된 방은 09:30에 제안한다
+    offer-start-at: "09:30"
+    # 12:00 전에는 "지금 바로" 입실(40,000원), 12:00부터는 정각 단위(12시 30,000 / 13시 20,000 / 14시 10,000원)
+    immediate-check-in-until: "12:00"
+    # 다음 정각까지 15분 이하로 남으면 그 다음 정각부터 판다 (11:50 준비 → 지금 바로, 13:00, 14:00)
+    early-check-in-min-lead: 15m
