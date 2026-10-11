@@ -28,7 +28,7 @@ class RoomAssignmentRuleTest {
 	private static final LocalDate DAY = LocalDate.of(2026, 10, 10);
 
 	private static final CheckInPolicy POLICY = new CheckInPolicy(LocalTime.of(12, 0), LocalTime.of(14, 0),
-			LocalTime.of(13, 30), LocalTime.of(14, 30), LocalTime.of(15, 0), LocalTime.of(11, 0),
+			LocalTime.of(13, 30), Duration.ofMinutes(15), LocalTime.of(15, 0), LocalTime.of(11, 0),
 			Duration.ofMinutes(30), 8, 10_000, 4, LocalTime.of(9, 30), LocalTime.of(12, 0), Duration.ofMinutes(15));
 
 	private final RoomAssignmentRule rule = new RoomAssignmentRule(POLICY);

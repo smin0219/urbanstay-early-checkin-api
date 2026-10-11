@@ -116,7 +116,7 @@ class GuestCheckInApiTest {
 			.bodyJson()
 			.extractingPath("$.detail")
 			.asString()
-			.contains("14:30");
+			.contains("14:45");
 		assertThat(view().stage()).isEqualTo(Stage.WAITING_PASSWORD);
 		assertThat(view().offerStatus()).isEqualTo(OfferStatus.EXPIRED);
 	}
@@ -128,7 +128,7 @@ class GuestCheckInApiTest {
 		GuestCheckInResponse view = api.read(api.post(base() + "/decline", null), GuestCheckInResponse.class);
 
 		assertThat(view.stage()).isEqualTo(Stage.WAITING_PASSWORD);
-		assertThat(view.passwordAt()).isEqualTo(at("14:30"));
+		assertThat(view.passwordAt()).isEqualTo(at("14:45"));
 	}
 
 	@Test

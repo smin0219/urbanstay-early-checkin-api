@@ -27,7 +27,8 @@ urbanstay:
     noon-notice-at: "12:00"
     last-early-check-in-at: "14:00"
     cleaning-warning-at: "13:30"
-    password-send-at: "14:30"
+    # 비밀번호는 입실 15분 전에 보낸다 (기본 체크인 15:00 → 14:45, 13:00 얼리체크인 → 12:45, 지금 바로 → 결제 즉시)
+    password-lead: 15m
     standard-check-in-at: "15:00"
     standard-check-out-at: "11:00"
     early-checkout-threshold: 30m

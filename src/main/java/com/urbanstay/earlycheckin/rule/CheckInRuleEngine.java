@@ -63,7 +63,7 @@ public final class CheckInRuleEngine {
 				if (canOffer(now, r, room)) {
 					yield new SendEarlyOffer(id);
 				}
-				if (now.isBefore(today.atTime(policy.passwordSendAt()))) {
+				if (now.isBefore(today.atTime(policy.standardPasswordSendAt()))) {
 					yield null;
 				}
 				yield room.isReady() ? new SendPassword(id) : new HoldPassword(id);
@@ -135,10 +135,9 @@ public final class CheckInRuleEngine {
 		return slot.isBefore(earliest) ? earliest : slot;
 	}
 
-	/** 비밀번호 발송 조건: 객실 준비 완료, 발송 시각(얼리 확정이면 결제한 입실 시각) 도달 */
+	/** 비밀번호 발송 조건: 객실 준비 완료, 발송 시각(입실 시각 15분 전. 얼리 확정이면 결제한 입실 시각 기준) 도달 */
 	private List<Condition> passwordConditions(LocalDateTime now, ReservationSnapshot r, RoomSnapshot room) {
-		LocalDateTime sendAt = r.status() == ReservationStatus.EARLY_CONFIRMED ? r.earlyCheckInAt()
-				: r.checkInDate().atTime(policy.passwordSendAt());
+		LocalDateTime sendAt = passwordSendAt(r);
 		return List.of(
 				new Condition(Type.ROOM_READY, room.isReady(), room.isReady() ? room.readyAt() : null, null),
 				new Condition(Type.SEND_TIME_REACHED, !now.isBefore(sendAt), now, sendAt));
@@ -335,19 +334,18 @@ public final class CheckInRuleEngine {
 			}
 		}
 		if (r.status() == ReservationStatus.EARLY_CONFIRMED) {
-			return new NextStep(NextStep.Type.SEND_PASSWORD, Actor.SYSTEM, r.earlyCheckInAt());
+			return new NextStep(NextStep.Type.SEND_PASSWORD, Actor.SYSTEM, latest(passwordSendAt(r), now));
 		}
 		if (r.noonNoticeSentAt() == null && r.paidAt() == null) {
 			return new NextStep(NextStep.Type.NOON_NOTICE, Actor.SYSTEM, day.atTime(policy.noonNoticeAt()));
 		}
-		return new NextStep(NextStep.Type.SEND_PASSWORD, Actor.SYSTEM,
-				latest(day.atTime(policy.passwordSendAt()), now));
+		return new NextStep(NextStep.Type.SEND_PASSWORD, Actor.SYSTEM, latest(passwordSendAt(r), now));
 	}
 
-	/** 청소를 끝내야 하는 다음 기준 시각: 경고 시각, 지났으면 비밀번호 발송 시각 */
+	/** 청소를 끝내야 하는 다음 기준 시각: 경고 시각, 지났으면 기본 체크인 비밀번호 발송 시각 */
 	private LocalDateTime cleaningDeadline(LocalDateTime now) {
 		LocalDate today = now.toLocalDate();
-		for (LocalTime deadline : List.of(policy.cleaningWarningAt(), policy.passwordSendAt())) {
+		for (LocalTime deadline : List.of(policy.cleaningWarningAt(), policy.standardPasswordSendAt())) {
 			if (now.isBefore(today.atTime(deadline))) {
 				return today.atTime(deadline);
 			}
@@ -363,6 +361,11 @@ public final class CheckInRuleEngine {
 		return r.checkInDate().atTime(policy.standardCheckInAt());
 	}
 
+	/** 비밀번호 발송 시각: 입실할 시각보다 비밀번호 발송 여유만큼 앞. "지금 바로" 입실은 이미 지났으므로 결제 즉시 나간다. */
+	private LocalDateTime passwordSendAt(ReservationSnapshot r) {
+		return policy.passwordSendAt(expectedCheckIn(r));
+	}
+
 	/**
 	 * {@code from}과 {@code to} 사이(양 끝 제외)에서 규칙을 평가해야 하는 시각. 시계를 크게 건너뛰어도 각 시점의
 	 * 판단과 발송 시각이 그대로 남도록, 시계 이동 시 이 시각들을 차례로 거쳐 간다.
@@ -370,7 +373,7 @@ public final class CheckInRuleEngine {
 	public List<LocalDateTime> checkpoints(RuleContext ctx, LocalDateTime from, LocalDateTime to) {
 		TreeSet<LocalDateTime> times = new TreeSet<>();
 		List<LocalTime> policyTimes = List.of(policy.offerStartAt(), policy.noonNoticeAt(), policy.cleaningWarningAt(),
-				policy.lastEarlyCheckInAt(), policy.passwordSendAt(), policy.standardCheckInAt());
+				policy.lastEarlyCheckInAt(), policy.standardPasswordSendAt(), policy.standardCheckInAt());
 		for (LocalDate day = from.toLocalDate(); !day.isAfter(to.toLocalDate()); day = day.plusDays(1)) {
 			for (LocalTime time : policyTimes) {
 				times.add(day.atTime(time));
@@ -378,7 +381,7 @@ public final class CheckInRuleEngine {
 		}
 		ctx.reservations().stream()
 			.filter(r -> r.status() == ReservationStatus.EARLY_CONFIRMED && r.earlyCheckInAt() != null)
-			.forEach(r -> times.add(r.earlyCheckInAt()));
+			.forEach(r -> times.add(policy.passwordSendAt(r.earlyCheckInAt())));
 		return times.stream().filter(t -> t.isAfter(from) && t.isBefore(to)).toList();
 	}
 

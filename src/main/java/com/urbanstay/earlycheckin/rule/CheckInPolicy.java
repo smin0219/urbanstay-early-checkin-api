@@ -1,6 +1,7 @@
 package com.urbanstay.earlycheckin.rule;
 
 import java.time.Duration;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 
 /**
@@ -9,7 +10,7 @@ import java.time.LocalTime;
  * @param noonNoticeAt 정오 안내 발송 시각
  * @param lastEarlyCheckInAt 얼리체크인으로 입실할 수 있는 마지막 정각 (이 시각이 되면 제안 만료)
  * @param cleaningWarningAt 미준비 객실 운영자 경고 시각
- * @param passwordSendAt 비밀번호 발송 시각 (얼리 확정이 아닌 예약)
+ * @param passwordLead 입실 시각보다 이만큼 먼저 비밀번호를 보낸다 (기본 체크인이든 얼리체크인이든 같다)
  * @param standardCheckInAt 기본 체크인 시각 (이후에도 미준비면 지연 안내·경고 상향)
  * @param standardCheckOutAt 기본 퇴실 시각
  * @param earlyCheckoutThreshold 예정 퇴실보다 이만큼 이상 일찍 나가면 조기 퇴실로 본다
@@ -24,7 +25,7 @@ public record CheckInPolicy(
 		LocalTime noonNoticeAt,
 		LocalTime lastEarlyCheckInAt,
 		LocalTime cleaningWarningAt,
-		LocalTime passwordSendAt,
+		Duration passwordLead,
 		LocalTime standardCheckInAt,
 		LocalTime standardCheckOutAt,
 		Duration earlyCheckoutThreshold,
@@ -34,4 +35,15 @@ public record CheckInPolicy(
 		LocalTime offerStartAt,
 		LocalTime immediateCheckInUntil,
 		Duration earlyCheckInMinLead) {
+
+	/** 입실 시각이 {@code checkInAt}인 예약의 비밀번호 발송 시각 */
+	public LocalDateTime passwordSendAt(LocalDateTime checkInAt) {
+		return checkInAt.minus(passwordLead);
+	}
+
+	/** 기본 체크인 시각에 들어오는 예약의 비밀번호 발송 시각 (기본값 14:45) */
+	public LocalTime standardPasswordSendAt() {
+		return standardCheckInAt.minus(passwordLead);
+	}
+
 }

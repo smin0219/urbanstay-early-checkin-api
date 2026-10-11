@@ -82,8 +82,8 @@ class ClockScenarioTest {
 				tuple(MessageType.NOON_NOTICE, "501", time("12:00")),
 				tuple(MessageType.NOON_NOTICE, "803", time("12:00")),
 				tuple(MessageType.NOON_NOTICE, "901", time("12:00")),
-				tuple(MessageType.PASSWORD, "501", time("14:30")),
-				tuple(MessageType.PASSWORD, "901", time("14:30")),
+				tuple(MessageType.PASSWORD, "501", time("14:45")),
+				tuple(MessageType.PASSWORD, "901", time("14:45")),
 				tuple(MessageType.DELAY_NOTICE, "803", time("15:00")));
 
 		DashboardResponse dashboard = dashboard();
@@ -134,7 +134,7 @@ class ClockScenarioTest {
 					tuple(time("12:00"), Milestone.Type.NOON_NOTICE),
 					tuple(time("13:30"), Milestone.Type.CLEANING_WARNING),
 					tuple(time("14:00"), Milestone.Type.OFFER_EXPIRY),
-					tuple(time("14:30"), Milestone.Type.PASSWORD_SEND),
+					tuple(time("14:45"), Milestone.Type.PASSWORD_SEND),
 					tuple(time("15:00"), Milestone.Type.STANDARD_CHECK_IN));
 	}
 

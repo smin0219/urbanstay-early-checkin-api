@@ -14,7 +14,7 @@ import com.urbanstay.earlycheckin.rule.EarlyCheckInOption;
  * @param offer 결제를 기다리는 제안이 있을 때만
  * @param earlyCheckIn 얼리체크인을 결제했을 때만
  * @param offerStatus 제안 결과 (만료·거절·환불 안내용)
- * @param passwordAt 비밀번호를 보낼 예정 시각 (얼리 확정이면 입실 시각, 아니면 비밀번호 발송 시각)
+ * @param passwordAt 비밀번호를 보낼 예정 시각 (입실 시각 15분 전. 얼리 확정이면 고른 입실 시각 기준)
  * @param password 비밀번호 발송 후에만
  * @param delayed 기본 체크인 시각이 지나도 객실이 준비되지 않아 지연 안내를 받음
  */

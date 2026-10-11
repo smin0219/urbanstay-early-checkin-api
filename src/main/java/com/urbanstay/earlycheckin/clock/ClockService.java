@@ -67,7 +67,7 @@ public class ClockService {
 				new Milestone(day.atTime(policy.noonNoticeAt()), Milestone.Type.NOON_NOTICE),
 				new Milestone(day.atTime(policy.cleaningWarningAt()), Milestone.Type.CLEANING_WARNING),
 				new Milestone(day.atTime(policy.lastEarlyCheckInAt()), Milestone.Type.OFFER_EXPIRY),
-				new Milestone(day.atTime(policy.passwordSendAt()), Milestone.Type.PASSWORD_SEND),
+				new Milestone(day.atTime(policy.standardPasswordSendAt()), Milestone.Type.PASSWORD_SEND),
 				new Milestone(day.atTime(policy.standardCheckInAt()), Milestone.Type.STANDARD_CHECK_IN)));
 	}
 

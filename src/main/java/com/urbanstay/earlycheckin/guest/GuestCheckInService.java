@@ -83,10 +83,11 @@ public class GuestCheckInService {
 		}
 		r.confirmEarlyCheckIn(chosen, fee, idempotencyKey, now);
 		String room = r.getRoom().getNumber();
+		LocalDateTime passwordSendAt = policy.passwordSendAt(chosen);
 		messageLogRepository.save(new MessageLog(r, MessageType.EARLY_CONFIRMATION, now, ("[어반스테이] %s님, 얼리체크인이 "
 				+ "확정되었습니다(%s 입실, %,d원 결제). 객실은 %s호이며, 1층 공동현관 → 엘리베이터 → %s호 도어락으로 들어오시면 됩니다. "
-				+ "비밀번호는 %s에 보내드립니다. 체크인 안내: %s").formatted(r.getGuestName(), chosen.format(HH_MM), fee, room, room,
-						chosen.format(HH_MM), r.checkInPath())));
+				+ "비밀번호는 %s 보내드립니다. 체크인 안내: %s").formatted(r.getGuestName(), chosen.format(HH_MM), fee, room, room,
+						passwordSendAt.isAfter(now) ? passwordSendAt.format(HH_MM) + "에" : "바로", r.checkInPath())));
 		evaluationService.evaluate();
 		return toResponse(r, now);
 	}
@@ -120,8 +121,8 @@ public class GuestCheckInService {
 		Stage stage = stage(r);
 		boolean roomGuided = roomGuided(r) && r.getRoom() != null;
 		LocalDateTime passwordAt = switch (stage) {
-			case EARLY_CONFIRMED -> r.getEarlyCheckInAt();
-			case BEFORE_NOTICE, OFFER_OPEN, WAITING_PASSWORD -> r.getCheckInDate().atTime(policy.passwordSendAt());
+			case EARLY_CONFIRMED -> policy.passwordSendAt(r.getEarlyCheckInAt());
+			case BEFORE_NOTICE, OFFER_OPEN, WAITING_PASSWORD -> r.getCheckInDate().atTime(policy.standardPasswordSendAt());
 			default -> null;
 		};
 		boolean passwordSent = stage == Stage.PASSWORD_READY || stage == Stage.CHECKED_IN;
@@ -159,7 +160,7 @@ public class GuestCheckInService {
 	private String message(PaymentRejection reason) {
 		return switch (reason) {
 			case OFFER_EXPIRED -> "얼리체크인은 %s 전까지 신청할 수 있습니다. 비밀번호는 %s에 보내드립니다."
-				.formatted(policy.lastEarlyCheckInAt().format(HH_MM), policy.passwordSendAt().format(HH_MM));
+				.formatted(policy.lastEarlyCheckInAt().format(HH_MM), policy.standardPasswordSendAt().format(HH_MM));
 			case OFFER_NOT_OPEN -> "결제할 수 있는 얼리체크인 제안이 없습니다.";
 			case TIME_PASSED -> "선택한 입실 시각이 지나 결제할 수 없습니다. 다른 시각을 선택해 주세요.";
 			case INVALID_TIME -> "선택할 수 없는 입실 시각입니다.";

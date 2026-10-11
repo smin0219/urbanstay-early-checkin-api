@@ -35,7 +35,7 @@ class CheckInRuleEngineTest {
 	private static final LocalDate DAY = LocalDate.of(2026, 10, 10);
 
 	private static final CheckInPolicy POLICY = new CheckInPolicy(LocalTime.of(12, 0), LocalTime.of(14, 0),
-			LocalTime.of(13, 30), LocalTime.of(14, 30), LocalTime.of(15, 0), LocalTime.of(11, 0),
+			LocalTime.of(13, 30), Duration.ofMinutes(15), LocalTime.of(15, 0), LocalTime.of(11, 0),
 			Duration.ofMinutes(30), 8, 10_000, 4, LocalTime.of(9, 30), LocalTime.of(12, 0), Duration.ofMinutes(15));
 
 	private final CheckInRuleEngine engine = new CheckInRuleEngine(POLICY);
@@ -155,29 +155,30 @@ class CheckInRuleEngineTest {
 	class 비밀번호_발송 {
 
 		@Test
-		void 준비된_방은_14시30분에_보낸다() {
+		void 준비된_방은_기본_체크인_15분_전인_14시45분에_보낸다() {
 			ArrivalBuilder assigned = arrival(1).in("1203").noticed().offer(OfferStatus.EXPIRED);
 
-			assertThat(evaluate("14:29", readyRoom("1203", "11:10"), assigned)).isEmpty();
-			assertThat(evaluate("14:30", readyRoom("1203", "11:10"), assigned)).containsExactly(new SendPassword(1));
+			assertThat(evaluate("14:44", readyRoom("1203", "11:10"), assigned)).isEmpty();
+			assertThat(evaluate("14:45", readyRoom("1203", "11:10"), assigned)).containsExactly(new SendPassword(1));
 		}
 
 		@Test
-		void 미준비_방은_14시30분에_보류한다() {
-			assertThat(evaluate("14:30", room("803", RoomStatus.CLEANING), arrival(2).in("803").noticed()))
+		void 미준비_방은_14시45분에_보류한다() {
+			assertThat(evaluate("14:44", room("803", RoomStatus.CLEANING), arrival(2).in("803").noticed())).isEmpty();
+			assertThat(evaluate("14:45", room("803", RoomStatus.CLEANING), arrival(2).in("803").noticed()))
 				.containsExactly(new HoldPassword(2));
 		}
 
 		@Test
 		void 보류된_예약은_준비_완료_즉시_보낸다() {
 			assertThat(evaluate("15:20", readyRoom("803", "15:20"),
-					arrival(2).in("803").noticed().status(ReservationStatus.PASSWORD_HELD).held("14:30")))
+					arrival(2).in("803").noticed().status(ReservationStatus.PASSWORD_HELD).held("14:45")))
 				.containsExactly(new SendPassword(2));
 		}
 
 		@Test
 		void 기본_체크인_시각이_되어도_미준비면_지연_안내를_한_번_보낸다() {
-			ArrivalBuilder held = arrival(2).in("803").noticed().status(ReservationStatus.PASSWORD_HELD).held("14:30");
+			ArrivalBuilder held = arrival(2).in("803").noticed().status(ReservationStatus.PASSWORD_HELD).held("14:45");
 
 			assertThat(evaluate("14:59", room("803", RoomStatus.CLEANING), held)).isEmpty();
 			assertThat(evaluate("15:00", room("803", RoomStatus.CLEANING), held))
@@ -193,12 +194,12 @@ class CheckInRuleEngineTest {
 		}
 
 		@Test
-		void 얼리_확정_건은_결제한_입실_시각에_보낸다() {
+		void 얼리_확정_건은_결제한_입실_시각_15분_전에_보낸다() {
 			ArrivalBuilder confirmed = arrival(1).in("1203").noticed().status(ReservationStatus.EARLY_CONFIRMED)
 				.offer(OfferStatus.ACCEPTED).earlyAt("13:00");
 
-			assertThat(evaluate("12:59", readyRoom("1203", "11:10"), confirmed)).isEmpty();
-			assertThat(evaluate("13:00", readyRoom("1203", "11:10"), confirmed)).containsExactly(new SendPassword(1));
+			assertThat(evaluate("12:44", readyRoom("1203", "11:10"), confirmed)).isEmpty();
+			assertThat(evaluate("12:45", readyRoom("1203", "11:10"), confirmed)).containsExactly(new SendPassword(1));
 		}
 
 	}
@@ -222,7 +223,7 @@ class CheckInRuleEngineTest {
 		@Test
 		void 기본_체크인_시각이_지나면_경고_단계가_오른다() {
 			assertThat(engine.alerts(context("15:00", List.of(room("803", RoomStatus.CLEANING)),
-					arrival(2).in("803").noticed().status(ReservationStatus.PASSWORD_HELD).held("14:30"))))
+					arrival(2).in("803").noticed().status(ReservationStatus.PASSWORD_HELD).held("14:45"))))
 				.extracting(OperatorAlert::type, OperatorAlert::level)
 				.containsExactly(
 						tuple(OperatorAlert.Type.PASSWORD_HELD, Level.CRITICAL),
@@ -292,10 +293,10 @@ class CheckInRuleEngineTest {
 		}
 
 		@Test
-		void 얼리_확정이면_정오_안내_없이_입실_정각에_비밀번호_발송() {
+		void 얼리_확정이면_정오_안내_없이_입실_정각_15분_전에_비밀번호_발송() {
 			assertThat(nextStep("10:10", List.of(readyRoom("501", "09:00")),
 					arrival(3).in("501").offered("09:30").paid("10:05", "12:00")))
-				.isEqualTo(new NextStep(NextStep.Type.SEND_PASSWORD, Actor.SYSTEM, at("12:00")));
+				.isEqualTo(new NextStep(NextStep.Type.SEND_PASSWORD, Actor.SYSTEM, at("11:45")));
 		}
 
 		@Test
@@ -304,7 +305,7 @@ class CheckInRuleEngineTest {
 				.isEqualTo(new NextStep(NextStep.Type.NOON_NOTICE, Actor.SYSTEM, at("12:00")));
 			assertThat(nextStep("12:30", List.of(readyRoom("501", "09:00")),
 					arrival(3).in("501").noticed().offer(OfferStatus.DECLINED)))
-				.isEqualTo(new NextStep(NextStep.Type.SEND_PASSWORD, Actor.SYSTEM, at("14:30")));
+				.isEqualTo(new NextStep(NextStep.Type.SEND_PASSWORD, Actor.SYSTEM, at("14:45")));
 		}
 
 	}
@@ -451,12 +452,12 @@ class CheckInRuleEngineTest {
 	}
 
 	@Test
-	void 시계_이동_사이의_규칙_시각과_얼리_입실_시각을_거쳐_간다() {
+	void 시계_이동_사이의_규칙_시각과_얼리_확정_건의_비밀번호_발송_시각을_거쳐_간다() {
 		RuleContext ctx = context("09:30", List.of(readyRoom("1203", "11:10")), arrival(1).in("1203").noticed()
 			.status(ReservationStatus.EARLY_CONFIRMED).offer(OfferStatus.ACCEPTED).earlyAt("13:00"));
 
 		assertThat(engine.checkpoints(ctx, at("09:30"), at("15:00")))
-			.containsExactly(at("12:00"), at("13:00"), at("13:30"), at("14:00"), at("14:30"));
+			.containsExactly(at("12:00"), at("12:45"), at("13:30"), at("14:00"), at("14:45"));
 	}
 
 	private List<RuleAction> evaluate(String now, RoomSnapshot room, ArrivalBuilder arrival) {

@@ -85,7 +85,7 @@ class DemoScenarioTest {
 		assertThat(api.get("/api/check-in/" + api.checkInToken(PARK_JUNHO), GuestCheckInResponse.class).stage())
 			.isEqualTo(Stage.WAITING_PASSWORD);
 
-		// 7. 13:00 비밀번호 → 13:10 입실
+		// 7. 13:00 입실 15분 전(12:45)에 비밀번호 → 13:10 입실
 		api.advanceTo("13:00");
 		GuestCheckInResponse password = api.get("/api/check-in/" + token, GuestCheckInResponse.class);
 		assertThat(password.stage()).isEqualTo(Stage.PASSWORD_READY);
@@ -100,8 +100,8 @@ class DemoScenarioTest {
 		assertThat(dashboard(api).alerts()).extracting(AlertItem::type, AlertItem::roomNumber)
 			.contains(tuple(OperatorAlert.Type.CLEANING_DELAY, "803"));
 
-		// 9. 14:30 803호 비밀번호 보류 → 15:00 지연 안내 → 15:20 청소 완료 즉시 비밀번호
-		api.advanceTo("14:30");
+		// 9. 14:45 803호 비밀번호 보류 → 15:00 지연 안내 → 15:20 청소 완료 즉시 비밀번호
+		api.advanceTo("14:50");
 		assertThat(dashboard(api).alerts()).extracting(AlertItem::type)
 			.contains(OperatorAlert.Type.PASSWORD_HELD);
 		api.advanceTo("15:10");
@@ -110,7 +110,7 @@ class DemoScenarioTest {
 		assertThat(messages("1203")).containsExactly(
 				tuple(MessageType.EARLY_OFFER, at("11:10")),
 				tuple(MessageType.EARLY_CONFIRMATION, at("11:20")),
-				tuple(MessageType.PASSWORD, at("13:00")));
+				tuple(MessageType.PASSWORD, at("12:45")));
 		assertThat(messages("803")).containsExactly(
 				tuple(MessageType.NOON_NOTICE, at("12:00")),
 				tuple(MessageType.DELAY_NOTICE, at("15:00")),
