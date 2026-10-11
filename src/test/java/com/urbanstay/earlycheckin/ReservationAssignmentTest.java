@@ -24,12 +24,21 @@ import com.urbanstay.earlycheckin.reservation.ReservationDetailResponse.Excluded
 import com.urbanstay.earlycheckin.rule.AssignmentOptions.Reason;
 import com.urbanstay.earlycheckin.rule.RoomAssignmentRule;
 
-/** 샘플 데이터의 김민수 예약(id 1, Studio, 고층·시티뷰 요청)으로 배정 화면 API를 확인한다. */
+/**
+ * 샘플 데이터의 김민수 예약(id 1, Studio, 고층·시티뷰 요청)으로 배정 화면 API를 확인하고, 데모 시나리오 밖에서 직접 배정해 보도록
+ * 둔 미배정 예약 3건(정유진·오세훈·임지아)의 추천 결과를 확인한다.
+ */
 @SpringBootTest
 @AutoConfigureMockMvc
 class ReservationAssignmentTest {
 
 	private static final long KIM_MINSU = 1;
+
+	private static final long JUNG_YUJIN = 5;
+
+	private static final long OH_SEHUN = 6;
+
+	private static final long LIM_JIA = 7;
 
 	@Autowired
 	private MockMvcTester mvc;
@@ -57,7 +66,50 @@ class ReservationAssignmentTest {
 					tuple("1001", Reason.OUT_OF_SERVICE),
 					tuple("1105", Reason.STAY_OVERLAP),
 					tuple("501", Reason.ROOM_TYPE_MISMATCH),
-					tuple("901", Reason.ROOM_TYPE_MISMATCH));
+					tuple("601", Reason.ROOM_TYPE_MISMATCH),
+					tuple("701", Reason.ROOM_TYPE_MISMATCH),
+					tuple("702", Reason.ROOM_TYPE_MISMATCH),
+					tuple("901", Reason.ROOM_TYPE_MISMATCH),
+					tuple("902", Reason.ROOM_TYPE_MISMATCH));
+	}
+
+	@Test
+	void 시티뷰를_요청한_정유진은_701호가_1순위_702호가_2순위이고_501호는_숙박이_겹친다() {
+		ReservationDetailResponse detail = detail(JUNG_YUJIN);
+
+		assertThat(detail.assignment().candidates())
+			.extracting(c -> c.room().number(), CandidateItem::matchCount)
+			.containsExactly(tuple("701", 1L), tuple("702", 0L));
+		assertThat(detail.assignment().excluded())
+			.filteredOn(e -> e.room().number().equals("501"))
+			.extracting(e -> e.reasons().getFirst().reason(), e -> e.reasons().getFirst().conflict().guestName())
+			.containsExactly(tuple(Reason.STAY_OVERLAP, "이서연"));
+	}
+
+	@Test
+	void 연박하는_오세훈은_내일_예약이_잡힌_601호를_제외하고_902호만_추천한다() {
+		ReservationDetailResponse detail = detail(OH_SEHUN);
+
+		assertThat(detail.assignment().candidates()).extracting(c -> c.room().number()).containsExactly("902");
+		assertThat(detail.assignment().excluded())
+			.filteredOn(e -> e.reasons().getFirst().reason() == Reason.STAY_OVERLAP)
+			.extracting(e -> e.room().number(), e -> e.reasons().getFirst().conflict().guestName())
+			.containsExactlyInAnyOrder(tuple("601", "배수아"), tuple("901", "최지훈"));
+	}
+
+	@Test
+	void 요청이_없는_임지아는_김민수가_1203호를_가져가면_802호만_남는다() {
+		assertThat(detail(LIM_JIA).assignment().candidates()).extracting(c -> c.room().number())
+			.containsExactly("802", "1203");
+
+		assertThat(assign(KIM_MINSU, "1203")).hasStatusOk();
+
+		ReservationDetailResponse detail = detail(LIM_JIA);
+		assertThat(detail.assignment().candidates()).extracting(c -> c.room().number()).containsExactly("802");
+		assertThat(detail.assignment().excluded())
+			.filteredOn(e -> e.room().number().equals("1203"))
+			.extracting(e -> e.reasons().getFirst().conflict().guestName())
+			.containsExactly("김민수");
 	}
 
 	@Test

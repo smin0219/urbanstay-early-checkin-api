@@ -6,7 +6,11 @@
     { "number": "901", "type": "DELUXE", "floor": 9, "view": "CITY", "status": "READY", "readyAt": "2026-10-10T09:10:00" },
     { "number": "803", "type": "STUDIO", "floor": 8, "view": "CITY", "status": "OCCUPIED" },
     { "number": "802", "type": "STUDIO", "floor": 8, "view": "COURTYARD", "status": "READY", "readyAt": "2026-10-09T16:00:00" },
-    { "number": "501", "type": "TWIN", "floor": 5, "view": "COURTYARD", "status": "READY", "readyAt": "2026-10-09T15:30:00" }
+    { "number": "501", "type": "TWIN", "floor": 5, "view": "COURTYARD", "status": "READY", "readyAt": "2026-10-09T15:30:00" },
+    { "number": "701", "type": "TWIN", "floor": 7, "view": "CITY", "status": "READY", "readyAt": "2026-10-09T15:40:00" },
+    { "number": "702", "type": "TWIN", "floor": 7, "view": "COURTYARD", "status": "READY", "readyAt": "2026-10-09T15:50:00" },
+    { "number": "902", "type": "DELUXE", "floor": 9, "view": "COURTYARD", "status": "READY", "readyAt": "2026-10-09T16:10:00" },
+    { "number": "601", "type": "DELUXE", "floor": 6, "view": "CITY", "status": "READY", "readyAt": "2026-10-09T16:20:00" }
   ],
   "reservations": [
     {
@@ -30,6 +34,28 @@
       "checkInDate": "2026-10-10", "checkOutDate": "2026-10-12",
       "requests": ["HIGH_FLOOR"],
       "roomNumber": "901", "status": "ASSIGNED"
+    },
+    {
+      "id": 5, "guestName": "정유진", "roomType": "TWIN",
+      "checkInDate": "2026-10-10", "checkOutDate": "2026-10-11",
+      "requests": ["CITY_VIEW"],
+      "status": "PENDING_ASSIGNMENT"
+    },
+    {
+      "id": 6, "guestName": "오세훈", "roomType": "DELUXE",
+      "checkInDate": "2026-10-10", "checkOutDate": "2026-10-12",
+      "requests": ["HIGH_FLOOR"],
+      "status": "PENDING_ASSIGNMENT"
+    },
+    {
+      "id": 7, "guestName": "임지아", "roomType": "STUDIO",
+      "checkInDate": "2026-10-10", "checkOutDate": "2026-10-11",
+      "status": "PENDING_ASSIGNMENT"
+    },
+    {
+      "id": 8, "guestName": "배수아", "roomType": "DELUXE",
+      "checkInDate": "2026-10-11", "checkOutDate": "2026-10-13",
+      "roomNumber": "601", "status": "ASSIGNED"
     },
     {
       "id": 101, "guestName": "윤서준", "roomType": "STUDIO",

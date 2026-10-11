@@ -122,6 +122,9 @@ class DemoScenarioTest {
 		assertThat(summary.earlyOffered()).isEqualTo(3);
 		assertThat(summary.earlyConfirmed()).isEqualTo(1);
 		assertThat(summary.earlyRevenue()).isEqualTo(20_000);
+		// 시나리오 밖에서 직접 배정해 보도록 둔 미배정 예약 3건(정유진·오세훈·임지아)의 알림만 남는다
+		assertThat(dashboard(api).alerts()).extracting(AlertItem::type)
+			.containsExactly(OperatorAlert.Type.UNASSIGNED, OperatorAlert.Type.UNASSIGNED, OperatorAlert.Type.UNASSIGNED);
 		assertThat(messageLogRepository.findAll()).filteredOn(m -> m.getType() == MessageType.PASSWORD)
 			.allSatisfy(m -> assertThat(m.getRoomStatus()).isEqualTo(RoomStatus.READY));
 	}

@@ -54,8 +54,8 @@ class ClockScenarioTest {
 		DashboardResponse dashboard = dashboard();
 
 		assertThat(dashboard.now()).isEqualTo(START);
-		assertThat(dashboard.summary().arrivals()).isEqualTo(4);
-		assertThat(dashboard.summary().pendingAssignment()).isEqualTo(1);
+		assertThat(dashboard.summary().arrivals()).isEqualTo(7);
+		assertThat(dashboard.summary().pendingAssignment()).isEqualTo(4);
 		assertThat(dashboard.summary().awaitingCheckout()).isEqualTo(1);
 		assertThat(dashboard.summary().ready()).isEqualTo(2);
 		assertThat(dashboard.alerts()).isEmpty();
@@ -64,7 +64,10 @@ class ClockScenarioTest {
 					tuple("김민수", NextStep.Type.ASSIGN_ROOM),
 					tuple("박준호", NextStep.Type.WAIT_CHECKOUT),
 					tuple("이서연", NextStep.Type.GUEST_PAYMENT),
-					tuple("최지훈", NextStep.Type.GUEST_PAYMENT));
+					tuple("최지훈", NextStep.Type.GUEST_PAYMENT),
+					tuple("정유진", NextStep.Type.ASSIGN_ROOM),
+					tuple("오세훈", NextStep.Type.ASSIGN_ROOM),
+					tuple("임지아", NextStep.Type.ASSIGN_ROOM));
 		assertThat(dashboard.summary().earlyOffered()).isEqualTo(2);
 	}
 
@@ -89,11 +92,18 @@ class ClockScenarioTest {
 					tuple("김민수", ReservationStatus.PENDING_ASSIGNMENT),
 					tuple("박준호", ReservationStatus.PASSWORD_HELD),
 					tuple("이서연", ReservationStatus.PASSWORD_SENT),
-					tuple("최지훈", ReservationStatus.PASSWORD_SENT));
+					tuple("최지훈", ReservationStatus.PASSWORD_SENT),
+					tuple("정유진", ReservationStatus.PENDING_ASSIGNMENT),
+					tuple("오세훈", ReservationStatus.PENDING_ASSIGNMENT),
+					tuple("임지아", ReservationStatus.PENDING_ASSIGNMENT));
 		assertThat(dashboard.alerts()).extracting(DashboardResponse.AlertItem::type, DashboardResponse.AlertItem::level)
 			.containsExactly(
 					tuple(OperatorAlert.Type.PASSWORD_HELD, OperatorAlert.Level.CRITICAL),
 					tuple(OperatorAlert.Type.CLEANING_DELAY, OperatorAlert.Level.CRITICAL),
+					// 김민수와, 데모 시나리오 밖에서 직접 배정해 보도록 둔 정유진·오세훈·임지아
+					tuple(OperatorAlert.Type.UNASSIGNED, OperatorAlert.Level.WARNING),
+					tuple(OperatorAlert.Type.UNASSIGNED, OperatorAlert.Level.WARNING),
+					tuple(OperatorAlert.Type.UNASSIGNED, OperatorAlert.Level.WARNING),
 					tuple(OperatorAlert.Type.UNASSIGNED, OperatorAlert.Level.WARNING));
 		assertThat(dashboard.summary().earlyOffered()).isEqualTo(2);
 		assertThat(dashboard.summary().passwordsToUnreadyRooms()).isZero();
